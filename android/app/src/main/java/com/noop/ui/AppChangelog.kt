@@ -37,6 +37,15 @@ object AppChangelog {
     /** Newest first. */
     val releases: List<Release> = listOf(
         Release(
+            version = "1.19",
+            title = "Import polish (Mac) + WHOOP 5 optical decode",
+            date = "June 2026",
+            items = listOf(
+                "Changed (Mac): while an import is running, both Data Sources buttons now lock and only the source that's actually importing shows a spinner — so you can't start a WHOOP and an Apple Health import at the same time, and the loading state always points at the right card. Follow-up to the 1.18 status-message fix.",
+                "Decoding progress (WHOOP 5.0): NOOP now reads the strap's raw optical pulse (PPG) waveform from its stored history — a 24 Hz trace verified against your own heart rate, with no external reference. Nothing changes on screen yet; it's a building block toward 5.0 recovery and strain.",
+            ),
+        ),
+        Release(
             version = "1.18",
             title = "Import fixes — both sources, all data types",
             date = "June 2026",

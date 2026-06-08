@@ -17,6 +17,24 @@ approximate; downloads are on the [Releases](https://github.com/NoopApp/noop/rel
 
 ---
 
+## 1.19 — Import polish (Mac) + WHOOP 5 optical decode
+
+- **Changed (macOS): import buttons lock while an import runs** (follow-up to #40). While either
+  source is writing to the store, both Data Sources buttons disable and only the active source shows a
+  spinner — preventing two concurrent imports and keeping the loading state on the correct card. Each
+  source already kept its own status line (from 1.18); this serialises the import itself behind a single
+  `activeImportSource`.
+
+- **Added: WHOOP 5.0 optical PPG waveform decoded** (#43). The strap's high-rate type-47 **version-26**
+  history record — previously a raw region — is now decoded as a **24 Hz optical photoplethysmography
+  (PPG) trace**: 24 little-endian i16 ADC samples per second (`unix` u32 LE @15, channel id @12). It was
+  identified as optical, not motion, using heart rate as *internal* ground truth — the concatenated
+  waveform autocorrelates to the measured HR (lag 14 ≈ 103 bpm vs 101.7 bpm), trough-detection gives a
+  ~563 ms inter-beat interval, and the pulse stays HR-locked even when the wrist is still. Raw ADC counts
+  are exposed verbatim as `ppg_waveform` (PPG has no absolute unit — no scale is invented). Visible in
+  the strap inspector / `whoop-decode`; a building block toward 5.0 recovery and strain. Decoder-only and
+  version-keyed, so v18 and unknown versions are unaffected.
+
 ## 1.18 — Import fixes (Mac + Android)
 
 - **Fixed (macOS): an Apple Health import overwrote the WHOOP import's status message** in Data Sources
