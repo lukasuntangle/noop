@@ -103,6 +103,20 @@ fun TodayScreen(viewModel: AppViewModel, onSupport: () -> Unit = {}) {
         )
     }
 
+    // Steps for the selected day from imported Apple Health / Health Connect data — the Today Steps
+    // tile's fallback when the strap itself didn't bank an on-device count. A WHOOP 4.0 DOES count
+    // steps (in the official WHOOP app), but NOOP can't yet read them off the strap over Bluetooth, so
+    // on a 4.0 the tile shows your imported steps instead of "No Data". Reloads as the day selector
+    // moves. On-device WHOOP 5/MG steps still take precedence. (#150)
+    var importedStepsForDay by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(days, selectedDayKey) {
+        importedStepsForDay = stepsForDay(
+            viewModel.repo.appleDaily("apple-health", "0000-01-01", "9999-12-31"),
+            viewModel.repo.appleDaily("health-connect", "0000-01-01", "9999-12-31"),
+            selectedDayKey,
+        )
+    }
+
     // Recovery cold-start: recovery is null until the HRV baseline crosses the seed gate
     // (Baselines.minNightsSeed valid nights). Show honest "calibrating — N of 4 nights" progress
     // instead of a bare "No Data" so a new BLE-only user knows scores are coming, not broken. (PR #85)
@@ -210,7 +224,7 @@ fun TodayScreen(viewModel: AppViewModel, onSupport: () -> Unit = {}) {
         // METRICS — uniform tile grid (two columns), each tile with a 14-day sparkline.
         Spacer(Modifier.height(Metrics.selectorTopUp))
         SectionHeader("Key Metrics", overline = dayLabel, trailing = "14-day trend")
-        MetricGrid(displayMetric, window, recoveryCalibration, unitSystem, weightKg, profileWeightKg)
+        MetricGrid(displayMetric, window, recoveryCalibration, unitSystem, weightKg, profileWeightKg, importedStepsForDay)
         HeartRateTrendCard(viewModel, days, selectedDay)
         TodayWorkoutsSection(footer.recentWorkouts)
         TodaySourcesSection(footer)
@@ -290,6 +304,7 @@ private fun MetricGrid(
     unitSystem: UnitSystem = UnitSystem.METRIC,
     latestWeightKg: Double? = null,
     profileWeightKg: Double = 75.0,
+    importedStepsForDay: Int? = null,
 ) {
     val tiles = listOf<@Composable (Modifier) -> Unit>(
         { m ->
@@ -373,13 +388,17 @@ private fun MetricGrid(
             )
         },
         { m ->
-            // On-device daily step total derived from the WHOOP5 @57 counter (DailyMetric.steps). (#107)
+            // Steps: prefer the on-device WHOOP 5/MG @57 counter (DailyMetric.steps); if the strap
+            // didn't supply one — e.g. a WHOOP 4.0, which counts steps in the official WHOOP app but
+            // doesn't expose them to NOOP over Bluetooth — fall back to the steps imported from Apple
+            // Health / Health Connect for the day, instead of "No Data". (#107, #150)
+            val steps = d?.steps ?: importedStepsForDay
             SparkStatTile(
                 modifier = m,
                 label = "Steps",
-                value = d?.steps?.let { intString(it.toDouble()) } ?: NO_DATA,
-                caption = d?.steps?.let { "steps" }, // neutral: the day selector can show past days
-                accent = d?.steps?.let { Palette.metricCyan } ?: Palette.textTertiary,
+                value = steps?.let { intString(it.toDouble()) } ?: NO_DATA,
+                caption = steps?.let { "steps" }, // neutral: the day selector can show past days
+                accent = steps?.let { Palette.metricCyan } ?: Palette.textTertiary,
                 spark = emptyList(),
                 sparkColor = Palette.metricCyan,
             )
@@ -880,6 +899,21 @@ internal fun latestWeightKg(apple: List<AppleDaily>, healthConnect: List<AppleDa
         .filter { it.weightKg != null }
         .maxByOrNull { it.day }
         ?.weightKg
+
+/**
+ * Steps for [dayKey] from the imported Apple Health / Health Connect daily aggregates, or null when
+ * neither source carries a step total for that day. Backs the Today Steps-tile fallback for straps
+ * NOOP can't read steps off over Bluetooth — notably the WHOOP 4.0, which DOES count steps (in the
+ * official WHOOP app) but doesn't expose them to NOOP — so on a 4.0 the tile shows imported steps
+ * rather than "No Data". On-device WHOOP 5/MG steps (DailyMetric.steps) still take precedence at the
+ * call site. When both sources report the same day, the larger (most-complete) total wins so we never
+ * sum and double-count. Mirrors the macOS TodayView, which already falls back to imported steps. (#150)
+ */
+internal fun stepsForDay(apple: List<AppleDaily>, healthConnect: List<AppleDaily>, dayKey: String): Int? =
+    (apple + healthConnect)
+        .filter { it.day == dayKey }
+        .mapNotNull { it.steps }
+        .maxOrNull()
 
 /**
  * Resolve the Weight tile text: prefer the latest Apple/Health-Connect weight, else fall back to the

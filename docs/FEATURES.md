@@ -98,7 +98,9 @@ The home dashboard (`TodayView.swift`, titled "Control Center"). A tight, gaples
   word (Depleted / Low / Steady / Primed / Peak).
 - **Key Metrics** — a uniform tile grid, each with a 14-day sparkline: Recovery, Day Strain
   (of 21), Sleep (hours + efficiency), HRV, Resting HR, Blood Oxygen, Respiratory,
-  Steps (WHOOP 5/MG only — the 4.0 has no step counter — and approximate),
+  Steps (on-device only for WHOOP 5/MG; on a 4.0, NOOP shows your imported Apple Health /
+  Health Connect steps, because it can't yet read steps off the 4.0 strap over Bluetooth —
+  the 4.0 itself does count steps in the official WHOOP app — and approximate),
   Weight, Calories. WHOOP metrics come from the `my-whoop` source; Steps/Weight/Calories/
   Respiratory pull from `apple-health`. Sparse series (e.g. weight) fall back to all history so
   a tile never shows empty when data exists.

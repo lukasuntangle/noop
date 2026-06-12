@@ -17,6 +17,16 @@ approximate; downloads are on the [Releases](https://github.com/NoopApp/noop/rel
 
 ---
 
+## 1.99 — Your imported steps now show on the Today screen (Android)
+
+- **New (Android):** the Today screen's **Steps** tile now shows the steps from your Apple Health /
+  Health Connect import when the strap didn't bank an on-device count — so a **WHOOP 4.0**, which NOOP
+  can't yet read steps off over Bluetooth, shows your imported steps instead of "No Data" (Mac and iOS
+  already did this). Worth saying plainly: the WHOOP 4.0 **does** count steps in the official WHOOP app
+  — the only gap was that NOOP couldn't surface them yet. (#150)
+
+---
+
 ## 1.98 — The archived-sleep recovery now reaches Android too
 
 - **Recovered (Android):** the reject-archive retro-decode that landed on Mac & iOS in v1.97 now runs
