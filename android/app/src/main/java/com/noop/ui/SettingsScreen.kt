@@ -708,13 +708,13 @@ fun SettingsScreen(vm: AppViewModel) {
                 if (deepData) {
                     Button(
                         onClick = { vm.ble.enableWhoop5DeepData() },
-                        enabled = live.bonded && live.worn,
+                        enabled = live.encryptedBond && live.worn,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Palette.accent, contentColor = Palette.surfaceBase,
                         ),
                     ) { Text("Send enable sequence to strap") }
                     Text(
-                        if (!live.bonded) "Connect and bond a 5/MG strap first."
+                        if (!live.encryptedBond) "Needs the full encrypted bond — close the official WHOOP app and pair the strap to NOOP first (a live-HR-only link can't carry the unlock)."
                         else if (!live.worn) "Put the strap on first — the deep stream is on-wrist only."
                         else "Wear the strap, tap once, then let it sync and share your strap log.",
                         style = NoopType.caption,

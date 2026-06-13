@@ -1870,8 +1870,11 @@ class WhoopBleClient(
             log("Deep-data: the deep-data experiment is off — enable it in Settings first."); return
         }
         val s = _state.value
-        if (!s.connected || !s.bonded) {
-            log("Deep-data: connect and bond a 5/MG strap first — ignored."); return
+        if (!s.connected || !s.encryptedBond) {
+            // The R22 SET_CONFIG writes go over the encrypted command channel, so the live-HR-only
+            // shortcut (bonded true, encryptedBond false on a 5/MG still owned by the official app,
+            // #69/#266) can't carry them. Require the genuine bond, or the writes silently fail (#269).
+            log("Deep-data: needs the full encrypted bond, not the live-HR-only link. Close the official WHOOP app, put the strap in pairing mode, and bond it to NOOP first — ignored."); return
         }
         if (!s.worn) {
             log("Deep-data: the R22 stream is on-wrist only — put the strap ON, then try again."); return

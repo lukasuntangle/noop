@@ -977,8 +977,11 @@ public final class BLEManager: NSObject, ObservableObject {
         guard PuffinExperiment.deepDataEnabled else {
             log("Deep-data: the deep-data experiment is off — enable it in Settings → Experimental first."); return
         }
-        guard state.connected, state.bonded else {
-            log("Deep-data: connect and bond a 5/MG strap first — ignored."); return
+        guard state.connected, state.encryptedBond else {
+            // The R22 SET_CONFIG writes go over the encrypted command channel, so the live-HR-only
+            // shortcut (`bonded` true, `encryptedBond` false on a 5/MG still owned by the official app,
+            // #69/#266) can't carry them. Require the genuine bond, or the writes silently fail (#269).
+            log("Deep-data: needs the full encrypted bond, not the live-HR-only link. Close the official WHOOP app, put the strap in pairing mode, and bond it to NOOP first — ignored."); return
         }
         guard state.worn else {
             log("Deep-data: the R22 stream is on-wrist only — put the strap ON, then try again."); return

@@ -415,8 +415,8 @@ struct SettingsView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(StrandPalette.accent)
-                    .disabled(!live.bonded || !live.worn)
-                    Text(live.bonded ? (live.worn ? "Wear the strap, tap once, then let it sync and share your strap log." : "Put the strap on first — the deep stream is on-wrist only.") : "Connect and bond a 5/MG strap first.")
+                    .disabled(!live.encryptedBond || !live.worn)
+                    Text(live.encryptedBond ? (live.worn ? "Wear the strap, tap once, then let it sync and share your strap log." : "Put the strap on first — the deep stream is on-wrist only.") : "Needs the full encrypted bond — close the official WHOOP app and pair the strap to NOOP first (a live-HR-only link can't carry the unlock).")
                         .font(StrandFont.caption)
                         .foregroundStyle(StrandPalette.textTertiary)
 
