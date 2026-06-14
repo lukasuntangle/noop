@@ -18,6 +18,15 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "2.18.4",
+          "buildVersion": "73",
+          "date": "2026-06-14",
+          "localizedDescription": "Dynamic Island toggle fix",
+          "downloadURL": "https://github.com/NoopApp/noop/releases/download/v2.18.4/NOOP-v2.18.4-ios.ipa",
+          "size": 6601262,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "2.18.3",
           "buildVersion": "72",
           "date": "2026-06-14",
@@ -379,12 +388,12 @@
           "NSHealthUpdateUsageDescription": "NOOP writes the metrics it computes from your strap back into Apple Health, on-device and only when you allow it."
         }
       },
-      "version": "2.18.3",
-      "buildVersion": "72",
+      "version": "2.18.4",
+      "buildVersion": "73",
       "versionDate": "2026-06-14",
-      "versionDescription": "Workouts header layout fix",
-      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v2.18.3/NOOP-v2.18.3-ios.ipa",
-      "size": 6599824,
+      "versionDescription": "Dynamic Island toggle fix",
+      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v2.18.4/NOOP-v2.18.4-ios.ipa",
+      "size": 6601262,
       "minOSVersion": "17.0"
     }
   ],
