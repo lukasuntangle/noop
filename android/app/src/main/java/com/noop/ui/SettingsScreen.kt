@@ -1,9 +1,11 @@
 package com.noop.ui
 
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -29,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Straighten
@@ -227,6 +230,11 @@ fun SettingsScreen(vm: AppViewModel) {
     // Effort display scale (#268) — show NOOP's native 0–100 Effort or WHOOP's 0–21 Day Strain axis.
     // Display-only; the stored value never changes. Mirrors into local state like the toggles above.
     var effortScale by remember { mutableStateOf(UnitPrefs.effortScale(context)) }
+
+    // App icon (v3 "Titanium & Gold") — machined-titanium (.IconDefault) or blued-titanium (.IconNavy).
+    // SharedPreferences isn't reactive, so the segmented control drives this local mirror; flipping it
+    // enables exactly one launcher alias via PackageManager (see setAppIcon below).
+    var appIconNavy by remember { mutableStateOf(NoopPrefs.appIconNavy(context)) }
 
     // SAF launchers — CreateDocument for export, OpenDocument for import.
     val exportLauncher = rememberLauncherForActivityResult(
@@ -479,6 +487,28 @@ fun SettingsScreen(vm: AppViewModel) {
                         },
                     )
                 }
+            }
+        }
+
+        // --- App icon (v3 "Titanium & Gold") ---
+        // Two staged launcher icons — machined titanium (default) and blued/dark-blue titanium. The
+        // swap is done by enabling exactly one <activity-alias> (.IconDefault / .IconNavy) at runtime;
+        // the launcher may take a beat (or briefly disappear/redraw) while it re-reads the icon.
+        SettingsSection(
+            icon = Icons.Filled.Palette,
+            title = "App icon",
+            blurb = "Choose how NOOP looks on your home screen. The launcher may take a moment to refresh the icon after you change it.",
+        ) {
+            FormRow(label = "Icon") {
+                SegmentedPillControl(
+                    items = listOf(false, true),
+                    selection = appIconNavy,
+                    label = { if (it) "Blue Titanium" else "Titanium" },
+                    onSelect = { navy ->
+                        appIconNavy = navy
+                        setAppIcon(context, navy)
+                    },
+                )
             }
         }
 
@@ -1209,6 +1239,39 @@ fun SettingsScreen(vm: AppViewModel) {
 }
 
 private const val SUPPORT_EMAIL = "thenoopapp@gmail.com"
+
+// MARK: - App icon swap (v3 "Titanium & Gold")
+
+/**
+ * The two launcher-icon aliases declared in AndroidManifest.xml. Exactly one is ever enabled — the
+ * enabled one is the app's home-screen entry point and supplies the launcher icon.
+ */
+private const val ALIAS_DEFAULT = "com.noop.IconDefault" // machined titanium
+private const val ALIAS_NAVY = "com.noop.IconNavy"       // blued / dark-blue titanium
+
+/**
+ * Persist the chosen launcher icon and flip the manifest aliases so exactly one is enabled:
+ * [navy] true enables `.IconNavy` and disables `.IconDefault`, false does the inverse. We use
+ * DONT_KILL_APP so the toggle doesn't tear down our own process. The home launcher may briefly hide
+ * and redraw the icon (or take a few seconds) while it re-reads the component state — that's expected
+ * and is the only user-visible side effect.
+ */
+private fun setAppIcon(context: Context, navy: Boolean) {
+    NoopPrefs.setAppIconNavy(context, navy)
+    val pm = context.packageManager
+    pm.setComponentEnabledSetting(
+        ComponentName(context, ALIAS_NAVY),
+        if (navy) PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+        PackageManager.DONT_KILL_APP,
+    )
+    pm.setComponentEnabledSetting(
+        ComponentName(context, ALIAS_DEFAULT),
+        if (navy) PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        else PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+        PackageManager.DONT_KILL_APP,
+    )
+}
 
 // MARK: - Strap status helpers (mirror SettingsView's computed properties)
 

@@ -182,6 +182,19 @@ object NoopPrefs {
         of(context).edit().putBoolean(KEY_DEBUG_LOGGING, enabled).apply()
     }
 
+    /** Launcher-icon preference (v3 "Titanium & Gold"). false = machined-titanium (.IconDefault,
+     *  the default); true = blued/dark-blue titanium (.IconNavy). The actual swap is done by
+     *  enabling exactly one of the two <activity-alias> entries via PackageManager — this bool just
+     *  records the user's choice so the App Icon control reflects it across restarts. */
+    const val KEY_APP_ICON_NAVY = "noop.appIconNavy"
+
+    fun appIconNavy(context: Context): Boolean =
+        of(context).getBoolean(KEY_APP_ICON_NAVY, false)
+
+    fun setAppIconNavy(context: Context, navy: Boolean) {
+        of(context).edit().putBoolean(KEY_APP_ICON_NAVY, navy).apply()
+    }
+
     /** Imperial/Metric display preference (D#103). Display-only — stored data stays SI. The length/mass
      *  system is read by [UnitPrefs.system]; the temperature override (empty = "match the system") by
      *  [UnitPrefs.temperature]. Mirrors macOS @AppStorage("units.system" / "units.temperature"). */

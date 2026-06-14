@@ -2,6 +2,9 @@ import SwiftUI
 #if os(macOS)
 import AppKit
 #endif
+#if os(iOS)
+import UIKit
+#endif
 import UniformTypeIdentifiers
 import StrandDesign
 import WhoopStore
@@ -48,6 +51,9 @@ struct SettingsView: View {
     @AppStorage(UnitPrefs.effortScaleKey) private var effortScaleRaw = EffortScale.hundred.rawValue
     // Live-HR Live Activity (Lock Screen + Dynamic Island), iOS only (#336). Default on.
     @AppStorage(UnitPrefs.liveActivityKey) private var liveActivityEnabled = true
+    // Alternate app icon (iOS only) — false = Titanium (primary AppIcon), true = Blue Titanium
+    // ("AppIcon-Navy"). Display-only preference; the live switch goes through setAlternateIconName.
+    @AppStorage("appIcon.alt") private var useNavyIcon = false
     private var unitSystem: UnitSystem { UnitSystem(rawValue: unitSystemRaw) ?? .metric }
     private var temperatureUnit: TemperatureUnit {
         UnitPrefs.resolveTemperature(system: unitSystem, override: temperatureRaw)
@@ -77,6 +83,9 @@ struct SettingsView: View {
                        subtitle: "Your numbers, your strap, and how NOOP works. All on \(Platform.deviceNounPhrase).") {
             profileCard
             unitsCard
+            #if os(iOS)
+            appearanceCard
+            #endif
             strapCard
             experimentalCard
             backupCard
@@ -324,6 +333,55 @@ struct SettingsView: View {
             }
         }
     }
+
+    // MARK: - Appearance (iOS-only — alternate app icon)
+
+    #if os(iOS)
+    /// App-icon picker (v3 "Titanium & Gold"). Switches between the primary machined-titanium icon
+    /// and the alternate blued-titanium "AppIcon-Navy" via UIApplication.setAlternateIconName.
+    /// iOS-only: macOS has no alternate-icon API.
+    private var appearanceCard: some View {
+        SettingsSection(
+            icon: "app.badge",
+            title: "Appearance",
+            blurb: "Pick the NOOP home-screen icon. Both are finished in titanium — the original machined silver, or a deep blued navy with gold."
+        ) {
+            VStack(spacing: 0) {
+                FormRow(label: "App icon") {
+                    Picker("App icon", selection: $useNavyIcon) {
+                        Text("Titanium").tag(false)
+                        Text("Blue Titanium").tag(true)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                    .accessibilityLabel("App icon")
+                    .onChange(of: useNavyIcon) { applyAppIcon($0) }
+                }
+            }
+        }
+    }
+
+    /// Apply the alternate-icon choice. Runs on the main actor (UIKit requirement) and tolerates the
+    /// no-op cases (already-set, unsupported); on failure it surfaces the error and reverts the toggle
+    /// so the control never disagrees with what's actually on the Home Screen.
+    private func applyAppIcon(_ useNavy: Bool) {
+        Task { @MainActor in
+            let target = useNavy ? "AppIcon-Navy" : nil
+            // No-op if iOS already shows the requested icon (avoids a needless system prompt).
+            guard UIApplication.shared.supportsAlternateIcons,
+                  UIApplication.shared.alternateIconName != target else { return }
+            do {
+                try await UIApplication.shared.setAlternateIconName(target)
+            } catch {
+                useNavyIcon = !useNavy
+                backupAlertTitle = "Couldn't change the app icon"
+                backupAlertMessage = error.localizedDescription
+                showBackupAlert = true
+            }
+        }
+    }
+    #endif
 
     // MARK: - Strap
 

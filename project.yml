@@ -169,6 +169,16 @@ targets:
         AppGroupIdentifier: "$(APP_GROUP_ID)"
         LSApplicationCategoryType: public.app-category.healthcare-fitness
         UILaunchScreen: {}
+        # Alternate app icons (v3 "Titanium & Gold"). The primary icon stays the asset-catalog
+        # AppIcon (machined titanium); the alternate "AppIcon-Navy" (blued titanium) is declared
+        # here so UIApplication.setAlternateIconName("AppIcon-Navy") can switch to it at runtime.
+        # CFBundleIconFiles is intentionally empty — the artwork lives in the asset catalog, shipped
+        # via ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS, so no loose PNGs are listed here.
+        CFBundleIcons:
+          CFBundleAlternateIcons:
+            AppIcon-Navy:
+              CFBundleIconFiles: []
+              UIPrerenderedIcon: false
         NSSupportsLiveActivities: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -206,6 +216,9 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.noopapp.noop
         PRODUCT_NAME: NOOP
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Ship every *.appiconset (not just the primary AppIcon) so the alternate "AppIcon-Navy"
+        # set is compiled into the bundle and is available to UIApplication.setAlternateIconName.
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_EMIT_LOC_STRINGS: YES
