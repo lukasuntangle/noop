@@ -85,6 +85,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -1778,7 +1779,10 @@ private const val NO_DATA = "No Data"
 private val workoutDateFmt: DateTimeFormatter =
     DateTimeFormatter.ofPattern("d MMM", Locale.US).withZone(ZoneId.systemDefault())
 private val workoutTimeFmt: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("HH:mm", Locale.US).withZone(ZoneId.systemDefault())
+    // Respect the device's 12-/24-hour locale (#337): "7:10 AM" where 12-hour is preferred, "19:10"
+    // where 24-hour is — instead of forcing 24-hour on everyone.
+    DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
+        .withLocale(Locale.getDefault()).withZone(ZoneId.systemDefault())
 
 private fun countDetail(days: Int?, workouts: Int?, workoutLabel: String): String {
     if (days == null || workouts == null) return "Counting..."

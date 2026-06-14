@@ -7,7 +7,7 @@ enum AppChangelog {
 
     /// Bump this when you add a release below. The "What's New" sheet shows automatically when the
     /// stored last-seen version is behind this. (Decoupled from the bundle version on purpose.)
-    static let currentVersion = "2.18.1"
+    static let currentVersion = "2.18.2"
 
     struct Release: Identifiable {
         let version: String
@@ -19,6 +19,13 @@ enum AppChangelog {
 
     /// Newest first.
     static let releases: [Release] = [
+        Release(
+            version: "2.18.2",
+            title: "Times follow your 12-/24-hour setting",
+            date: "June 2026",
+            items: [
+                "Times now follow your device's 12-/24-hour setting. The heart-rate chart tooltip and the workout time ranges showed a fixed 24-hour clock (e.g. 19:10); they now read 7:10 PM where you prefer 12-hour, or stay 19:10 where you prefer 24-hour. Thanks @rad182 (#337).",
+            ]),
         Release(
             version: "2.18.1",
             title: "Toggle the live-HR Dynamic Island",

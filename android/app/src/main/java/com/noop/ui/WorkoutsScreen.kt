@@ -59,6 +59,7 @@ import com.noop.data.WorkoutRow
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -1041,7 +1042,9 @@ private val WorkoutRow.sourceBadge: Pair<String, Color>
 private val dateFmt: DateTimeFormatter =
     DateTimeFormatter.ofPattern("d MMM yyyy", Locale.US).withZone(ZoneId.systemDefault())
 private val timeFmt: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("HH:mm", Locale.US).withZone(ZoneId.systemDefault())
+    // Respect the device's 12-/24-hour locale (#337): "7:10 AM" or "19:10", not forced 24-hour.
+    DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
+        .withLocale(Locale.getDefault()).withZone(ZoneId.systemDefault())
 
 private fun dateLabel(ts: Long): String = dateFmt.format(Instant.ofEpochSecond(ts))
 private fun timeLabel(ts: Long): String = timeFmt.format(Instant.ofEpochSecond(ts))

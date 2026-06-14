@@ -17,6 +17,12 @@ approximate; downloads are on the [Releases](https://github.com/NoopApp/noop/rel
 
 ---
 
+## 2.18.2 — Times follow your 12-/24-hour setting
+
+- **Fixed:** the heart-rate chart tooltip and workout time ranges showed a fixed 24-hour clock (e.g. 19:10). They now respect your device's 12-/24-hour setting — "7:10 PM" where you prefer 12-hour, "19:10" where you prefer 24-hour. Thanks @rad182 (#337).
+
+---
+
 ## 2.18.1 — Toggle the live-HR Dynamic Island
 
 - **New (iPhone):** a toggle to keep your live heart rate out of the Dynamic Island / Lock Screen — **Settings → Strap → "Live heart rate in Dynamic Island"**. On by default. Thanks @gingerbeardman (#336).

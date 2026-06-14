@@ -1216,13 +1216,14 @@ struct TodayView: View {
         return f
     }()
 
-    /// Local wall-clock time ("HH:mm") for the HR trend's x-axis / tooltip — the chart spans one day,
-    /// so it must show times, not the day-granularity default ("EEE d MMM"). Also formats the
-    /// workout-tile caption's time range (#157).
+    /// Local wall-clock time for the HR trend's x-axis / tooltip — the chart spans one day, so it must
+    /// show times, not the day-granularity default ("EEE d MMM"). Also formats the workout-tile caption's
+    /// time range (#157). The "jmm" skeleton respects the device's 12-/24-hour setting (#337): "7:10 AM"
+    /// where 12-hour is preferred, "19:10" where 24-hour is — instead of forcing one on everyone.
     static let hrTimeFmt: DateFormatter = {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "HH:mm"
+        f.locale = Locale.current
+        f.setLocalizedDateFormatFromTemplate("jmm")
         return f
     }()
 }
