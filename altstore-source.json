@@ -18,6 +18,15 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "2.14.1",
+          "buildVersion": "60",
+          "date": "2026-06-14",
+          "localizedDescription": "Workouts stay whole + delete a sleep session",
+          "downloadURL": "https://github.com/NoopApp/noop/releases/download/v2.14.1/NOOP-v2.14.1-ios.ipa",
+          "size": 6361864,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "2.14.0",
           "buildVersion": "59",
           "date": "2026-06-14",
@@ -262,12 +271,12 @@
           "NSHealthUpdateUsageDescription": "NOOP writes the metrics it computes from your strap back into Apple Health, on-device and only when you allow it."
         }
       },
-      "version": "2.14.0",
-      "buildVersion": "59",
+      "version": "2.14.1",
+      "buildVersion": "60",
       "versionDate": "2026-06-14",
-      "versionDescription": "A beautiful new look: a premium dark redesign with layered ring gauges, frosted cards and per-domain colour worlds, across Mac, iPhone and Android.",
-      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v2.14.0/NOOP-v2.14.0-ios.ipa",
-      "size": 6360171,
+      "versionDescription": "Workouts stay whole + delete a sleep session",
+      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v2.14.1/NOOP-v2.14.1-ios.ipa",
+      "size": 6361864,
       "minOSVersion": "17.0"
     }
   ],
