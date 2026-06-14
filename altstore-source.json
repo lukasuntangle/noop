@@ -18,6 +18,15 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "2.13.0",
+          "buildVersion": "58",
+          "date": "2026-06-14",
+          "localizedDescription": "Big iPhone update: WHOOP-style Today chart, two-way Apple Health, full accessibility pass, pull-to-refresh, Siri shortcuts, iPad layout — plus sleep times and the Overview chart on Mac & Android. 19 community PRs reimplemented.",
+          "downloadURL": "https://github.com/NoopApp/noop/releases/download/v2.13.0/NOOP-v2.13.0-ios.ipa",
+          "size": 6307974,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "2.12.0",
           "buildVersion": "57",
           "date": "2026-06-14",
@@ -244,12 +253,12 @@
           "NSHealthUpdateUsageDescription": "NOOP writes the metrics it computes from your strap back into Apple Health, on-device and only when you allow it."
         }
       },
-      "version": "2.12.0",
-      "buildVersion": "57",
+      "version": "2.13.0",
+      "buildVersion": "58",
       "versionDate": "2026-06-14",
-      "versionDescription": "Continuous HRV capture (opt-in): keep the dense R-R stream armed in the background for far sharper overnight HRV, recovery and sleep — especially WHOOP 5.0/MG. Off by default. Thanks @Extazian (#278).",
-      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v2.12.0/NOOP-v2.12.0-ios.ipa",
-      "size": 6110517,
+      "versionDescription": "Big iPhone update: WHOOP-style Today chart, two-way Apple Health, full accessibility pass, pull-to-refresh, Siri shortcuts, iPad layout — plus sleep times and the Overview chart on Mac & Android. 19 community PRs reimplemented.",
+      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v2.13.0/NOOP-v2.13.0-ios.ipa",
+      "size": 6307974,
       "minOSVersion": "17.0"
     }
   ],
