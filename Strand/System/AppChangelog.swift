@@ -7,7 +7,7 @@ enum AppChangelog {
 
     /// Bump this when you add a release below. The "What's New" sheet shows automatically when the
     /// stored last-seen version is behind this. (Decoupled from the bundle version on purpose.)
-    static let currentVersion = "3.5.0"
+    static let currentVersion = "3.6.0"
 
     struct Release: Identifiable {
         let version: String
@@ -19,6 +19,14 @@ enum AppChangelog {
 
     /// Newest first.
     static let releases: [Release] = [
+        Release(
+            version: "3.6.0",
+            title: "A fresh look — new gold-on-navy icon",
+            date: "June 2026",
+            items: [
+                "**New app icon (everywhere):** a bolder take on the Titanium & Gold mark — a thick **gold recovery ring + core** on deep navy, across iPhone, Mac and Android (and the in-app logo). Same NOOP, sharper identity.",
+                "**Android — sleep corrections now stick:** bringing Android up to iPhone/Mac — when you hand-correct a night's bed/wake times, the correction now **survives the next strap sync** instead of quietly reverting (the edited night is no longer re-derived over, and editing the bedtime no longer risks a duplicate row).",
+            ]),
         Release(
             version: "3.5.0",
             title: "Hand-correct your sleep times + smaller backups",

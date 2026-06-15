@@ -167,12 +167,24 @@ class WhoopRepository(private val dao: WhoopDao) {
     suspend fun deleteComputedDailyInRange(deviceId: String, from: String, to: String) =
         dao.deleteDailyMetricsInRange(deviceId, from, to)
 
-    /** Adjust the start/end of an existing sleep session. startTs is part of the primary key, so
-     *  this deletes the old row and re-inserts a copy at the new window — every other field
-     *  (efficiency, restingHr, avgHrv, stagesJSON) is preserved via [SleepSession.copy]. */
+    /** Hand-correct the bed (onset) / wake (end) time of an existing sleep session, DURABLY — port
+     *  of iOS PR #395 (Repository.editSleepTimes + MetricsCache.applySleepEdit).
+     *
+     *  The corrected onset is stored in [SleepSession.startTsAdjusted] and [SleepSession.startTs] stays
+     *  the IMMUTABLE detected primary key, so this upsert REPLACEs the existing (deviceId, startTs) row
+     *  IN PLACE — no delete, no key move. [SleepSession.userEdited] is set true so the post-sync
+     *  recompute's overlap guard (IntelligenceEngine) preserves the correction instead of re-inserting
+     *  the strap-detected twin over it.
+     *
+     *  This fixes the prior Android bug: the old delete-then-reinsert MUTATED the startTs primary key,
+     *  so a later analysis run (which re-detects the night at a slightly drifted startTs) inserted a
+     *  SECOND row beside the edited one (different PK ⇒ no ON CONFLICT match), double-counting time in
+     *  bed AND reverting the edit. Every other field (efficiency, restingHr, avgHrv, stagesJSON) is
+     *  preserved via [SleepSession.copy]. */
     suspend fun updateSleepSessionTimes(session: SleepSession, newStartTs: Long, newEndTs: Long) {
-        dao.deleteSleepSession(session.deviceId, session.startTs)
-        dao.upsertSleepSessions(listOf(session.copy(startTs = newStartTs, endTs = newEndTs)))
+        dao.upsertSleepSessions(
+            listOf(session.copy(startTsAdjusted = newStartTs, endTs = newEndTs, userEdited = true)),
+        )
     }
 
     /** Remove a sleep session entirely — the delete half of [updateSleepSessionTimes] with no

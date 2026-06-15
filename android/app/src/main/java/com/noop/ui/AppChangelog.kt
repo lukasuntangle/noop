@@ -25,7 +25,7 @@ object AppChangelog {
      * Bump this when you add a release below. The "What's New" sheet shows automatically when the
      * stored last-seen version is behind this. (Decoupled from the bundle version on purpose.)
      */
-    const val CURRENT_VERSION = "3.5.0"
+    const val CURRENT_VERSION = "3.6.0"
 
     data class Release(
         val version: String,
@@ -36,6 +36,15 @@ object AppChangelog {
 
     /** Newest first. */
     val releases: List<Release> = listOf(
+        Release(
+            version = "3.6.0",
+            title = "A fresh look — new gold-on-navy icon",
+            date = "June 2026",
+            items = listOf(
+                "New app icon: a bolder Titanium & Gold mark — a thick gold recovery ring + core on deep navy, on iPhone, Mac and Android (and the in-app logo).",
+                "Sleep corrections now stick: when you hand-correct a night's bed/wake times, the correction survives the next strap sync instead of quietly reverting — bringing Android up to iPhone/Mac. The edited night is no longer re-derived over, and editing the bedtime no longer risks a duplicate row.",
+            ),
+        ),
         Release(
             version = "3.5.0",
             title = "Hand-correct your sleep times + smaller backups",

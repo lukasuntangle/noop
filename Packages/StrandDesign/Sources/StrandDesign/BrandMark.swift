@@ -6,11 +6,14 @@ import SwiftUI
 // "about", and empty states. Per the design handoff ("Engraved" app-icon
 // direction + the brand glyph spec):
 //
-//   • a circular BRUSHED-TITANIUM tile (Circle filled with the titanium ramp, a
-//     faint top sheen, and a 1px hairline rim), over which sits
+//   • a circular DEEP-NAVY tile (Circle filled with the navy ramp, a faint top
+//     sheen, and a 1px hairline rim), over which sits
 //   • an OPEN GOLD recovery ring — an ~80% arc starting at 12 o'clock (-90°) and
-//     sweeping clockwise, stroked with the gold ramp and round-capped, and
+//     sweeping clockwise, stroked with the gold ramp and round-capped (a THICK
+//     stroke to match the app icon), and
 //   • a solid GOLD CORE DOT centred ("on-device core").
+//
+// Gold-on-navy, matching the app icon (the maintainer's brand direction, 2026-06-15).
 //
 // It reads as the "O" in NOOP and as a small echo of the hero recovery ring.
 // CLEAN and flat by design: no bloom, no shadow, no glow — the titanium does the
@@ -34,15 +37,15 @@ public struct BrandMark: View {
     private var startAngle: Angle { .degrees(-90) }
 
     // Proportions derived from `size` so the mark is resolution-independent.
-    private var ringInset: CGFloat { size * 0.18 }          // tile edge → ring band
-    private var ringWidth: CGFloat { size * 0.085 }         // gold stroke thickness
+    private var ringInset: CGFloat { size * 0.20 }          // tile edge → ring band
+    private var ringWidth: CGFloat { size * 0.13 }          // THICK gold stroke (matches the icon)
     private var ringDiameter: CGFloat { size - ringInset * 2 }
-    private var coreDiameter: CGFloat { size * 0.155 }      // centre core dot
+    private var coreDiameter: CGFloat { size * 0.18 }       // centre core dot
     private var rimWidth: CGFloat { max(1, size * 0.008) }  // ~1px hairline rim
 
     public var body: some View {
         ZStack {
-            titaniumTile
+            navyTile
             goldRing
             coreDot
         }
@@ -52,35 +55,32 @@ public struct BrandMark: View {
         .accessibilityAddTraits(.isImage)
     }
 
-    // MARK: Brushed-titanium tile
+    // MARK: Deep-navy tile
 
-    /// The brushed-metal disc: a 150° titanium ramp, a faint top sheen for the
-    /// engraved highlight, and a soft hairline rim. No shadow — flat and clean.
-    private var titaniumTile: some View {
+    /// The navy disc the gold mark sits on — a deep-navy vertical ramp (lifted at
+    /// the top, deeper at the bottom) with a faint cool top sheen and a soft
+    /// hairline rim, matching the app icon. No shadow — flat and clean.
+    private var navyTile: some View {
         Circle()
             .fill(
                 LinearGradient(
-                    gradient: StrandPalette.titaniumGradient,
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                    colors: [Color(hex: "#0A1322"), Color(hex: "#05080F")],
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
             )
-            // Faint top sheen — a soft light catch across the upper third, kept
-            // low so the tile stays restrained rather than glossy.
+            // Faint cool top sheen — a soft light catch across the upper third.
             .overlay(
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [
-                                StrandPalette.titaniumTop.opacity(0.45),
-                                .clear
-                            ],
+                            colors: [Color(hex: "#17263E").opacity(0.55), .clear],
                             startPoint: .top,
                             endPoint: .center
                         )
                     )
                     .blendMode(.plusLighter)
-                    .opacity(0.5)
+                    .opacity(0.6)
             )
             // 1px hairline rim so the disc reads cleanly on the navy canvas.
             .overlay(

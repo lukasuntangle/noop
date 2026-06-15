@@ -17,6 +17,13 @@ approximate; downloads are on the [Releases](https://github.com/NoopApp/noop/rel
 
 ---
 
+## 3.6.0 — A fresh look (new gold-on-navy icon) + Android sleep durability
+
+- **New app icon, everywhere:** a bolder Titanium & Gold mark — a **thick gold recovery ring + core on deep navy** — replacing the machined-titanium tile across iPhone, Mac and Android launchers, the in-app `BrandMark`, and the README logo. Generated from `Tools/make_icon.py` (gold ramp `#FCEBA8 → #E8B84B → #C8902F` on navy `#070C16`).
+- **Android durable sleep editing (parity with v3.5.0 on iPhone/Mac):** when you hand-correct a night's bed/wake times, the edit now **survives the next strap sync**. Ports @claypilat's #395 mechanism to Android: a `userEdited` flag + a recompute overlap-guard so the re-detected night can't upsert over the edit, and `startTsAdjusted` keeps `startTs` the immutable detected key (editing the bedtime no longer mutates the primary key / spawns a duplicate row). Additive Room migration v6→v7 (`userEdited`, `startTsAdjusted`), verified clean on an emulator upgrade. Fixes the latent "edited night reappears" bug. Imported WHOOP-export nights keep verbatim export recovery (same scope as iOS).
+
+---
+
 ## 3.5.0 — Hand-correct your sleep times + smaller backups
 
 - **Sleep bed/wake editing (iPhone/Mac, #395):** the Sleep tab gains a pencil to hand-correct a night's Asleep/Woke times. The night is **re-staged from the raw sensor data** over the corrected window (real `SleepStager` for strap nights; stage-reclip for imported ones), and the edit is **durable** — a `userEdited` flag + a recompute guard drop any re-detected session that overlaps an edited night, so a later strap sync can't revert the correction. Two additive migrations (`userEdited`, `startTsAdjusted`); `startTs` stays the immutable detected key so editing the bedtime can't spawn a duplicate row. Imported WHOOP-export nights update the displayed session but keep verbatim export recovery/performance. Thanks @claypilat.

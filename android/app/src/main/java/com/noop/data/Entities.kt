@@ -211,8 +211,20 @@ data class DailyMetric(
 )
 
 /**
- * Cached server-computed sleep session. Swift `sleepSession` (v4).
+ * Cached server-computed sleep session. Swift `sleepSession` (v4 + v13 userEdited + v14 startTsAdjusted).
  * Natural key (deviceId, startTs). `stagesJSON` is the verbatim stage-segments JSON array.
+ *
+ * Durable bed/wake editing (port of iOS PR #395):
+ *   - [userEdited] (v13, MIGRATION_6_7): set true when the user hand-corrects this night's bed/wake
+ *     time. The post-sync recompute pass preserves those bounds instead of re-upserting the
+ *     strap-detected session over them (the overlap guard in IntelligenceEngine), so a later strap
+ *     re-sync can't revert the correction. Stored as INTEGER NOT NULL DEFAULT 0 (Room maps Boolean →
+ *     INTEGER), so every existing row reads as un-edited.
+ *   - [startTsAdjusted] (v14, MIGRATION_6_7): the hand-set bed (onset) time. [startTs] stays the
+ *     IMMUTABLE detected primary key (so the recompute guard + daily override keep matching on it,
+ *     and the upsert REPLACEs the row in place rather than spawning a duplicate at a moved key — the
+ *     latent Android bug this fix removes). Nullable INTEGER; null means "onset not edited, use
+ *     startTs". Display / sort / re-staging use [effectiveStartTs]. Mirrors the GRDB v14 migration.
  */
 @Entity(tableName = "sleepSession", primaryKeys = ["deviceId", "startTs"])
 data class SleepSession(
@@ -223,7 +235,15 @@ data class SleepSession(
     val restingHr: Int? = null,
     val avgHrv: Double? = null,
     val stagesJSON: String? = null,
-)
+    // v13/v14 (iOS PR #395 parity). Defaulted so every existing constructor call-site compiles
+    // unchanged and old rows read userEdited=false / startTsAdjusted=null.
+    val userEdited: Boolean = false,
+    val startTsAdjusted: Long? = null,
+) {
+    /** The bed (onset) time to DISPLAY / sort / re-stage by: the user's hand-set onset when edited,
+     *  else the immutable detected [startTs]. Mirrors Swift `CachedSleepSession.effectiveStartTs`. */
+    val effectiveStartTs: Long get() = startTsAdjusted ?: startTs
+}
 
 /**
  * Generic long-format metric store. Swift `metricSeries` (v9).

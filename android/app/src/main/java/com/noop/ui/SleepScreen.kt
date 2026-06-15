@@ -144,7 +144,8 @@ fun SleepScreen(
             }
             val importedDays = imported.map { localEndDay(it.endTs) }.toHashSet()
             val computedOnly = computed.filter { localEndDay(it.endTs) !in importedDays }
-            (imported + computedOnly).sortedBy { it.startTs }
+            // Sort by the EFFECTIVE onset so a hand-edited bedtime orders the night correctly. (PR #395)
+            (imported + computedOnly).sortedBy { it.effectiveStartTs }
         }.getOrDefault(emptyList())
         nightOffset = 0
     }
@@ -279,10 +280,16 @@ fun SleepScreen(
                 session = night?.session,
                 onUpdateTimes = { s, start, end ->
                     // Optimistic: rewrite this session in `sleeps` so every metric recomputes
-                    // immediately, then persist (delete-then-upsert) off the UI thread. (PR #260)
+                    // immediately, then persist DURABLY off the UI thread. Mirror the persist path —
+                    // keep the IMMUTABLE detected startTs and store the corrected onset in
+                    // startTsAdjusted with userEdited=true, so display (via effectiveStartTs) tracks the
+                    // edit while the (deviceId,startTs) key never moves. (PR #260 + #395)
                     sleeps = sleeps.map {
-                        if (it.deviceId == s.deviceId && it.startTs == s.startTs) it.copy(startTs = start, endTs = end)
-                        else it
+                        if (it.deviceId == s.deviceId && it.startTs == s.startTs) {
+                            it.copy(startTsAdjusted = start, endTs = end, userEdited = true)
+                        } else {
+                            it
+                        }
                     }
                     scope.launch { vm.updateSleepSessionTimes(s, start, end) }
                 },
@@ -423,8 +430,9 @@ private fun Hero(
         } else {
             val s = display.stages
             // After a bed/wake edit the session window is the source of truth for time-in-bed,
-            // so the subtitle tracks the edit even before the stage minutes are recomputed. (#160)
-            val inBedMin = session?.let { (it.endTs - it.startTs) / 60.0 } ?: s.total
+            // so the subtitle tracks the edit even before the stage minutes are recomputed. Uses the
+            // EFFECTIVE onset so a hand-edited bedtime is reflected. (#160 / PR #395)
+            val inBedMin = session?.let { (it.endTs - it.effectiveStartTs) / 60.0 } ?: s.total
             ChartCard(
                 title = "Stage breakdown",
                 subtitle = "${durationText(inBedMin)} in bed · ${display.efficiencyText} efficiency" +
@@ -452,7 +460,7 @@ private fun Hero(
                         // gives clock times. Mirrors the Swift Hypnogram(showsTimeAxis:).
                         HypnogramWithAxis(
                             stages = segments,
-                            onsetTs = session?.startTs,
+                            onsetTs = session?.effectiveStartTs,
                             wakeTs = session?.endTs,
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(Metrics.space16)) {
@@ -599,7 +607,7 @@ private fun stageColorFor(name: String): Color = when (name.trim().lowercase()) 
  */
 @Composable
 private fun SleepWindowRow(session: SleepSession) {
-    val asleep = clockTimeLabel(session.startTs)
+    val asleep = clockTimeLabel(session.effectiveStartTs)
     val woke = clockTimeLabel(session.endTs)
     // A frosted Rest-tinted card (was a flat surfaceRaised block) so the window row sits in the
     // same colour world as the rest of the screen. Bevel treatment — content unchanged.
@@ -676,7 +684,7 @@ private fun NightNavHeader(
     // Step 1 of the time edit: pick which end of the night to adjust (bedtime or wake-up).
     if (showTimeChoice && session != null) {
         val timeFmt = SimpleDateFormat("HH:mm", Locale.US)
-        val bedText = timeFmt.format(Date(session.startTs * 1000L))
+        val bedText = timeFmt.format(Date(session.effectiveStartTs * 1000L))
         val wakeText = timeFmt.format(Date(session.endTs * 1000L))
         val blockShape2 = RoundedCornerShape(Metrics.cornerSm)
         androidx.compose.material3.AlertDialog(
@@ -725,15 +733,17 @@ private fun NightNavHeader(
         )
     }
 
-    // Bed-time picker — keeps the original calendar date, only moves the hour/minute.
+    // Bed-time picker — keeps the original calendar date, only moves the hour/minute. Pre-fills from
+    // the EFFECTIVE onset so re-editing an already-corrected night starts from the edited bedtime, and
+    // the new onset is passed through onUpdateTimes (which stores it in startTsAdjusted). (PR #395)
     if (editingBed && session != null) {
-        val startCal = Calendar.getInstance().apply { timeInMillis = session.startTs * 1000L }
+        val startCal = Calendar.getInstance().apply { timeInMillis = session.effectiveStartTs * 1000L }
         DisposableEffect(Unit) {
             val dialog = TimePickerDialog(
                 context,
                 { _, h, m ->
                     val cal = Calendar.getInstance().apply {
-                        timeInMillis = session.startTs * 1000L
+                        timeInMillis = session.effectiveStartTs * 1000L
                         set(Calendar.HOUR_OF_DAY, h); set(Calendar.MINUTE, m)
                     }
                     onUpdateTimes(session, cal.timeInMillis / 1000L, session.endTs)
@@ -760,7 +770,9 @@ private fun NightNavHeader(
                         timeInMillis = session.endTs * 1000L
                         set(Calendar.HOUR_OF_DAY, h); set(Calendar.MINUTE, m)
                     }
-                    onUpdateTimes(session, session.startTs, cal.timeInMillis / 1000L)
+                    // Pass the EFFECTIVE onset so a wake-only edit preserves a previously-edited
+                    // bedtime (startTsAdjusted) rather than resetting it to the detected startTs. (PR #395)
+                    onUpdateTimes(session, session.effectiveStartTs, cal.timeInMillis / 1000L)
                     editingWake = false
                 },
                 endCal.get(Calendar.HOUR_OF_DAY),
@@ -775,7 +787,7 @@ private fun NightNavHeader(
 
     // Date jump — capped at today so a future night can't be selected.
     if (showDatePicker && onPickNightDate != null) {
-        val cal = session?.let { Calendar.getInstance().apply { timeInMillis = it.startTs * 1000L } }
+        val cal = session?.let { Calendar.getInstance().apply { timeInMillis = it.effectiveStartTs * 1000L } }
             ?: Calendar.getInstance()
         DisposableEffect(Unit) {
             val dialog = DatePickerDialog(
@@ -1599,7 +1611,7 @@ internal fun buildSleepModel(
     // hours vs needed, debt …) without waiting on a re-import.
     val sessionDurationMin = session
         ?.takeIf { AnalyticsEngine.dayString(it.endTs) == latest.day || localDayString(it.endTs) == latest.day }
-        ?.let { ((it.endTs - it.startTs) / 60.0).takeIf { d -> d > 0.0 } }
+        ?.let { ((it.endTs - it.effectiveStartTs) / 60.0).takeIf { d -> d > 0.0 } } // EFFECTIVE window (PR #395)
     // metricsWindow swaps the selected night's totalSleepMin for the edited duration in the
     // per-tile passes. typicalTotalMin intentionally keeps the UNMODIFIED windowDays so one
     // edited night never skews the personal mean.
@@ -1889,7 +1901,7 @@ private fun clockLabel(latest: DailyMetric, session: SleepSession?): String {
 private fun sessionClockLabel(session: SleepSession): String {
     val timeFmt = SimpleDateFormat("HH:mm", Locale.US)
     val dateFmt = SimpleDateFormat("EEE d MMM", Locale.US)
-    val onset = Date(session.startTs * 1000L)
+    val onset = Date(session.effectiveStartTs * 1000L) // EFFECTIVE onset so an edited bedtime shows (PR #395)
     val wake = Date(session.endTs * 1000L)
     return "${dateFmt.format(onset)} · ${timeFmt.format(onset)}–${timeFmt.format(wake)}"
 }
@@ -2046,7 +2058,7 @@ internal fun SleepConsistencyCard(sleeps: List<SleepSession>) {
     data class NightTiming(val label: String, val bedHour: Float, val wakeHour: Float)
     val sdf = SimpleDateFormat("EEE", Locale.US)
     val timings = recent.map { s ->
-        val bedCal = Calendar.getInstance().apply { timeInMillis = s.startTs * 1000L }
+        val bedCal = Calendar.getInstance().apply { timeInMillis = s.effectiveStartTs * 1000L } // edited bedtime (PR #395)
         val wakeCal = Calendar.getInstance().apply { timeInMillis = s.endTs * 1000L }
         val bedH = bedCal.get(Calendar.HOUR_OF_DAY) + bedCal.get(Calendar.MINUTE) / 60f
         // Fold an evening bedtime to a negative hour so it sorts ABOVE the next-day wake on the axis.

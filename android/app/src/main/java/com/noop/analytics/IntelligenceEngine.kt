@@ -315,25 +315,40 @@ object IntelligenceEngine {
         // dashboard Rest score reflects the new composite, not raw efficiency. Swift parity.
         val restRows = ArrayList<MetricSeriesRow>()
 
+        // User-corrected sleep windows for the COMPUTED source over the recompute window. They override
+        // the detected sleep when scoring a day's sleep aggregates (so Rest + recovery honor the edit,
+        // not just the Sleep tab's session view) AND gate the sleepRows upsert below (so a re-detected
+        // night can't re-insert over the edit). Mirrors iOS IntelligenceEngine editsByStart /
+        // sleepEditedDaily / cachedSleepKept. SCOPE (#318/PR #395): COMPUTED ("-noop") source only — an
+        // edit to an IMPORTED (WHOOP-export) night updates the displayed session, but its dashboard
+        // recovery/performance come verbatim from the export and are NOT recomputed here. Same honest
+        // scope as iOS. Keyed by the IMMUTABLE detected `startTs` (never `effectiveStartTs`), so an
+        // edited block lands exactly on its detected twin.
+        val editedRows = repo.sleepSessions(computedId, windowStart, nowSeconds).filter { it.userEdited }
+        val editsByStart: Map<Long, String?> = editedRows.associate { it.startTs to it.stagesJSON }
+
         for (res in scoredNights) {
-            val recovery = recomputeRecovery(res.daily, baselines2)
+            // Substitute an edited block's (reshaped) stages for its detected twin before the daily
+            // sleep aggregate feeds Rest + recovery. No edit touching this night → `daily` is unchanged.
+            val daily = sleepEditedDaily(res.daily, res.sleepSessions, editsByStart)
+            val recovery = recomputeRecovery(daily, baselines2)
             val skinTempDevC = recomputeSkinTempDev(res.nightlySkinTempC, baselines2.skinTemp)
-            RestScorer.restFromDaily(res.daily)?.let { rest ->
-                restRows.add(MetricSeriesRow(deviceId = computedId, day = res.daily.day, key = "sleep_performance", value = rest))
+            RestScorer.restFromDaily(daily)?.let { rest ->
+                restRows.add(MetricSeriesRow(deviceId = computedId, day = daily.day, key = "sleep_performance", value = rest))
             }
 
             out.add(
                 Computed(
-                    day = res.daily.day,
+                    day = daily.day,
                     recovery = recovery,
-                    strain = res.daily.strain,
-                    sleepMin = res.daily.totalSleepMin,
-                    hrv = res.daily.avgHrv,
-                    rhr = res.daily.restingHr,
+                    strain = daily.strain,
+                    sleepMin = daily.totalSleepMin,
+                    hrv = daily.avgHrv,
+                    rhr = daily.restingHr,
                 ),
             )
             // Stamp the computed source id + the re-scored recovery & skin-temp deviation onto the row.
-            dailies.add(res.daily.copy(deviceId = computedId, recovery = recovery, skinTempDevC = skinTempDevC))
+            dailies.add(daily.copy(deviceId = computedId, recovery = recovery, skinTempDevC = skinTempDevC))
             // Map the rich DetectedSleep sessions → Room SleepSession cache rows.
             for (s in res.sleepSessions) {
                 sleepRows.add(
@@ -390,7 +405,20 @@ object IntelligenceEngine {
         // this only fills the days the strap collected but no import covered.
         if (dailies.isNotEmpty()) repo.upsertDailyMetrics(dailies)
         if (restRows.isNotEmpty()) repo.upsertMetricSeries(restRows)
-        if (sleepRows.isNotEmpty()) repo.upsertSleepSessions(sleepRows)
+        // DURABILITY GUARD (iOS PR #395 cachedSleepKept): drop any freshly-detected session that
+        // time-overlaps a night the user has already hand-corrected. A detected onset can drift
+        // second-to-second as more raw data arrives, so without this the re-detected night would upsert
+        // as a SECOND row beside the edited one (different startTs ⇒ no ON CONFLICT match), and the
+        // mergeSleep / daily aggregate would DOUBLE-COUNT both into an inflated time-in-bed AND the edit
+        // would visually revert. The edited row is already stored (it carries userEdited=1 and is never
+        // re-emitted here — the engine only writes detected twins), so we simply don't re-insert its
+        // detected twin. Sleep has no delete-reinsert pass (unlike dailyMetric/workout), so this IS the
+        // idempotency guard for the edited case. Overlap uses the edit's EFFECTIVE window. (#318)
+        val editedWindows = editedRows.map { it.effectiveStartTs to it.endTs }
+        val sleepKept = sleepRows.filterNot { s ->
+            editedWindows.any { (start, end) -> s.startTs < end && start < s.endTs } // time-overlap test
+        }
+        if (sleepKept.isNotEmpty()) repo.upsertSleepSessions(sleepKept)
         // Make re-detection idempotent across runs: clear the prior computed detected workouts
         // in the scored window (a bout's startTs can drift as more HR arrives, which would
         // otherwise orphan stale rows under the (deviceId,startTs,sport) key), then re-insert.
@@ -458,6 +486,35 @@ object IntelligenceEngine {
             respBaseline = baselines.resp,
             sleepPerf = restQuality,
             skinTempDev = daily.skinTempDevC,
+        )
+    }
+
+    /**
+     * Override a day's detected sleep aggregates with the user's hand-corrected window when one of the
+     * night's blocks was edited. Substitutes each edited block (matched by its stable detected startTs)
+     * for its detected twin and recomputes totalSleep / efficiency / stage minutes from the reshaped
+     * stages, so the Rest composite and recovery score the corrected sleep — not the auto-detected
+     * window. No edit touching the night → the detected daily is returned unchanged. Faithful twin of
+     * Swift `IntelligenceEngine.sleepEditedDaily`. (#318 / PR #395)
+     */
+    private fun sleepEditedDaily(
+        daily: DailyMetric,
+        detected: List<DetectedSleep>,
+        editsByStart: Map<Long, String?>,
+    ): DailyMetric {
+        if (editsByStart.isEmpty()) return daily
+        // Match the Swift seam: detected blocks keyed by their stable startTs + their re-encoded stages.
+        val detectedTuples = detected.map { it.start to AnalyticsEngine.encodeStages(it.stages) }
+        val r = SleepStageTotals.dailyAggregateHonoringEdits(detectedTuples, editsByStart) ?: return daily
+        if (!r.editApplied) return daily
+        val agg = r.sleep
+        // Substitute ONLY the sleep-derived fields; every non-sleep field is left untouched.
+        return daily.copy(
+            totalSleepMin = agg.totalSleepMin,
+            efficiency = agg.efficiency,
+            deepMin = agg.deepMin,
+            remMin = agg.remMin,
+            lightMin = agg.lightMin,
         )
     }
 
