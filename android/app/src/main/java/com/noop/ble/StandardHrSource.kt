@@ -159,11 +159,19 @@ class StandardHrSource(
         log("HR-strap: connecting to ${device.address}")
         // Tear down any prior link first so we never run two GATTs for this source.
         gatt?.let { runCatching { it.disconnect(); it.close() } }
-        gatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            device.connectGatt(appContext, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
-        } else {
-            @Suppress("DEPRECATION")
-            device.connectGatt(appContext, false, gattCallback)
+        // connectGatt can throw (SecurityException if BLUETOOTH_CONNECT was revoked mid-session,
+        // IllegalArgumentException on a stale device) — never let that crash the app; the caller (and
+        // the SourceCoordinator reconcile guard) treat a failed start as "stay on the previous source".
+        gatt = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                device.connectGatt(appContext, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            } else {
+                @Suppress("DEPRECATION")
+                device.connectGatt(appContext, false, gattCallback)
+            }
+        }.getOrElse {
+            log("HR-strap: connectGatt failed (${it.javaClass.simpleName}: ${it.message})")
+            null
         }
     }
 
@@ -233,7 +241,7 @@ class StandardHrSource(
     // MARK: - GATT callback
 
     private val gattCallback = object : BluetoothGattCallback() {
-        override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
+        override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) = guardedCallback("connection-state") {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     if (status != BluetoothGatt.GATT_SUCCESS) {
@@ -266,23 +274,23 @@ class StandardHrSource(
             }
         }
 
-        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
+        override fun onServicesDiscovered(g: BluetoothGatt, status: Int) = guardedCallback("services-discovered") {
             log("HR-strap: services discovered (status=$status)")
             // Keep the silent-return behaviour, but LOG the reason first so #421 isn't blind.
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 log("HR-strap: WARNING service discovery failed (status=$status) — giving up on this strap")
-                return
+                return@guardedCallback
             }
             val svc = g.getService(HEART_RATE_SERVICE)
             if (svc == null) {
                 log("HR-strap: 0x180D heart-rate service NOT FOUND — this strap may not expose standard HR")
-                return
+                return@guardedCallback
             }
             log("HR-strap: 0x180D heart-rate service FOUND")
             val ch = svc.getCharacteristic(HEART_RATE_CHAR)
             if (ch == null) {
                 log("HR-strap: 0x2A37 measurement characteristic NOT FOUND — cannot read HR from this strap")
-                return
+                return@guardedCallback
             }
             log("HR-strap: 0x2A37 measurement characteristic found")
             g.setCharacteristicNotification(ch, true)
@@ -290,7 +298,7 @@ class StandardHrSource(
             val cccd = ch.getDescriptor(CCCD)
             if (cccd == null) {
                 log("HR-strap: WARNING 0x2A37 has no CCCD (0x2902) — cannot enable notifications")
-                return
+                return@guardedCallback
             }
             log("HR-strap: enabling notifications on 0x2A37")
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -338,15 +346,29 @@ class StandardHrSource(
         }
     }
 
-    private fun handleHr(data: ByteArray) {
-        val parsed = StandardHeartRate.parse(data) ?: return
+    /**
+     * Run a GATT-callback body so a throw on the binder thread (or the posted main-thread block) can
+     * never crash the app. BLE callbacks run outside any of our try/catch and outside the
+     * SourceCoordinator reconcile guard, so before this an exception in service-discovery, the HR
+     * parse, or the live-HR sink would crash the process — and because the strap is the persisted
+     * active source, it crash-LOOPED on every launch (#421 regression). A misbehaving strap must
+     * degrade to "no data", never take the app down. The message lands in the exportable strap log.
+     */
+    private fun guardedCallback(label: String, block: () -> Unit) {
+        runCatching(block).onFailure {
+            log("HR-strap: $label error (${it.javaClass.simpleName}: ${it.message})")
+        }
+    }
+
+    private fun handleHr(data: ByteArray) = guardedCallback("hr-parse") {
+        val parsed = StandardHeartRate.parse(data) ?: return@guardedCallback
         // Log the FIRST sample of a connection only — proof that data is flowing — never every sample.
         if (!loggedFirstHr) {
             loggedFirstHr = true
             log("HR-strap: receiving data — first sample ${parsed.hr} bpm (rr beats: ${parsed.rr.size})")
         }
         // Surface live HR on the main looper (the UI's StateFlow expects main-thread updates).
-        handler.post { liveSink(parsed.hr, parsed.rr) }
+        handler.post { guardedCallback("live-sink") { liveSink(parsed.hr, parsed.rr) } }
         enqueue(parsed.hr, parsed.rr)
     }
 

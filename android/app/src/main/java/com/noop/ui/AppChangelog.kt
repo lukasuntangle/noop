@@ -37,6 +37,14 @@ object AppChangelog {
     /** Newest first. */
     val releases: List<Release> = listOf(
         Release(
+            version = "4.1.1",
+            title = "Hotfix — making a heart-rate strap active no longer crashes",
+            date = "June 2026",
+            items = listOf(
+                "Fixed a crash introduced in 4.1.0: making a generic heart-rate strap (e.g. a Polar H10) active could crash the app on the spot — and because that strap stays your active source, it then crashed again on every launch. Activating a strap can no longer take the app down; if a strap fails to start it's now logged in your shareable strap log instead. Sorry to anyone this caught. Thanks @pilleuspulcher-blip (#421).",
+            ),
+        ),
+        Release(
             version = "4.1.0",
             title = "Estimated steps for your WHOOP 4.0",
             date = "June 2026",

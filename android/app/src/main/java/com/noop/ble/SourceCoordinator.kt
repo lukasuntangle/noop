@@ -164,7 +164,22 @@ class SourceCoordinator(
         if (id == lastSeenId) return
         lastSeenId = id
         val devices = registry.all()
-        if (isWhoop(id, devices)) switchToWhoop(id, devices) else switchToStrap(id, devices)
+        // CONTAIN every device-switch failure here. reconcile is the single entry point for both
+        // start() (launch, against the PERSISTED active id) and onActiveDeviceChanged(), and it runs
+        // inside a bare `scope.launch {}` — a SupervisorJob does NOT stop an uncaught throw from
+        // killing the process, so before this guard a throw while activating a generic strap crashed
+        // the app, and because the active id is persisted it crash-LOOPED on every launch (#421
+        // regression: making a Polar H10 active bricked the app). A strap switch must never crash the
+        // app. We log the exception into the EXPORTABLE strap log too, so the next shared log reveals
+        // the exact underlying throw, and reset lastSeenId so the user can retry after switching away.
+        try {
+            if (isWhoop(id, devices)) switchToWhoop(id, devices) else switchToStrap(id, devices)
+        } catch (t: Throwable) {
+            lastSeenId = null
+            log("SourceCoordinator: device switch to '$id' failed: ${t.javaClass.simpleName}: ${t.message}")
+            straplog("HR-strap: activating this device failed (${t.javaClass.simpleName}: ${t.message}) — " +
+                "staying on the previous source. Please share this log so we can fix it.")
+        }
     }
 
     /**
