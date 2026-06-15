@@ -132,6 +132,8 @@ private object CompareCatalog {
         CompareMetric("max_hr", "Max Heart Rate", "Heart", "bpm", "my-whoop", 0),
         CompareMetric("energy_kcal", "Calories", "Heart", "kcal", "my-whoop", 0),
         CompareMetric("vo2max", "VO₂ Max", "Heart", "", "apple-health", 1),
+        CompareMetric("fitness_age", "Fitness Age", "Heart", "yrs", "my-whoop", 0),
+        CompareMetric("vo2max_est", "VO₂ Max (estimated)", "Heart", "", "my-whoop", 1),
         // Charge (was Recovery)
         CompareMetric("recovery", "Charge", "Charge", "%", "my-whoop", 0),
         CompareMetric("hrv", "Heart Rate Variability", "Charge", "ms", "my-whoop", 0),

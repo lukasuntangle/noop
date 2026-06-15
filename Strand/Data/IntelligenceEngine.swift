@@ -33,6 +33,24 @@ final class IntelligenceEngine: ObservableObject {
         self.repo = repo; self.profile = profile; self.deviceId = deviceId
     }
 
+    /// Median of a list (0 when empty) — used to denoise the 7-day resting-HR for Fitness Age.
+    static func medianOf(_ xs: [Double]) -> Double {
+        guard !xs.isEmpty else { return 0 }
+        let s = xs.sorted(); let n = s.count
+        return n % 2 == 1 ? s[n / 2] : (s[n / 2 - 1] + s[n / 2]) / 2
+    }
+
+    /// The Saturday on-or-before a "yyyy-MM-dd" local-day string — the weekly key Fitness Age writes to.
+    static func saturdayKey(onOrBefore dayStr: String) -> String {
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = .current
+        let fmt = DateFormatter(); fmt.calendar = cal; fmt.timeZone = cal.timeZone
+        fmt.locale = Locale(identifier: "en_US_POSIX"); fmt.dateFormat = "yyyy-MM-dd"
+        guard let d = fmt.date(from: dayStr) else { return dayStr }
+        let back = cal.component(.weekday, from: d) % 7   // Sat(7)→0, Sun(1)→1 … Fri(6)→6
+        let sat = cal.date(byAdding: .day, value: -back, to: d) ?? d
+        return fmt.string(from: sat)
+    }
+
     /// UserDefaults flag guarding the one-shot #313 full-history Effort rescore (below). Set once the
     /// pass completes so it never re-runs.
     static let effortRescoreFlagKey = "intelligence.effortRescore.v313.done"
@@ -298,6 +316,34 @@ final class IntelligenceEngine: ObservableObject {
         // always wins; this only fills the days the strap collected but no import covered.
         if !dailies.isEmpty { _ = try? await store.upsertDailyMetrics(dailies, deviceId: computedId) }
         if !restPoints.isEmpty { _ = try? await store.upsertMetricSeries(restPoints, deviceId: computedId) }
+
+        // ── Fitness Age (Phase 2) — weekly, keyed to the week's Saturday ────────────────────────────
+        // Roll the last 7 computed days into the Nes/HUNT inputs and upsert a weekly Fitness Age (+ an
+        // optional VO₂max when a waist is set) under the same "-noop" source. Idempotent on the Saturday
+        // key, so the number refines through the week and finalises on Saturday. Engine = FitnessAgeEngine
+        // (StrandAnalytics), fully unit-tested; the body term cancels so the headline needs no body metric.
+        let fa7 = dailies.sorted { $0.day < $1.day }.suffix(7)
+        let faRHRs = fa7.compactMap { $0.restingHr }.map(Double.init)
+        let faActiveStrains = fa7.compactMap { $0.strain }.filter { $0 >= 30 }
+        let faMeanActiveStrain = faActiveStrains.isEmpty ? 0
+            : faActiveStrains.reduce(0, +) / Double(faActiveStrains.count)
+        let faWaist: Double? = profile.waistCm > 0 ? profile.waistCm : nil
+        let faReady = FitnessAgeEngine.assessReadiness(
+            hasAge: profile.age > 0, hasSex: !profile.sex.isEmpty,
+            rhrDays: faRHRs.count, activityDays: fa7.compactMap { $0.strain }.count,
+            hasHeightWeight: profile.heightCm > 0 && profile.weightKg > 0, hasWaist: faWaist != nil)
+        if faReady.canCompute,
+           let faRes = FitnessAgeEngine.compute(
+                age: Double(profile.age), sex: profile.sex,
+                restingHR: IntelligenceEngine.medianOf(faRHRs),
+                paIndex: FitnessAgeEngine.physicalActivityIndexFromStrain(
+                    activeDaysPerWeek: faActiveStrains.count, meanActiveStrain: faMeanActiveStrain),
+                waistCm: faWaist) {
+            let satKey = IntelligenceEngine.saturdayKey(onOrBefore: newestDay)
+            var faPts = [MetricPoint(day: satKey, key: "fitness_age", value: faRes.fitnessAge)]
+            if let v = faRes.vo2max { faPts.append(MetricPoint(day: satKey, key: "vo2max_est", value: v)) }
+            _ = try? await store.upsertMetricSeries(faPts, deviceId: computedId)
+        }
         // Drop any freshly-detected session that overlaps a night the user has already hand-corrected.
         // A detected onset can drift second-to-second as more raw data arrives, so without this the
         // re-detected night would upsert as a SECOND row beside the edited one (different startTs ⇒ no

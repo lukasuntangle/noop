@@ -172,6 +172,23 @@ struct SettingsView: View {
                     }
                 }
                 rowDivider
+                // Waist (optional). Unlike the rows above it, an empty waist is valid (0 = unset) —
+                // it's the ONE measurement that ADDS the VO₂max estimate alongside Fitness Age. It does
+                // NOT sharpen the Fitness Age itself (the body term cancels in the Nes model), so it sits
+                // apart with an honest "adds your VO₂max estimate" note rather than implying it tunes the age.
+                FormRow(label: "Waist (optional)") {
+                    // Imperial mode steps in whole inches and stores the cm equivalent; metric steps in cm.
+                    if unitSystem == .imperial {
+                        waistInchesField(waistCm: $profile.waistCm)
+                    } else {
+                        waistCentimetresField(waistCm: $profile.waistCm)
+                    }
+                }
+                Text("Optional — adds your VO₂max estimate. The Fitness Age itself doesn't need it. Measure around your middle, at the navel.")
+                    .font(StrandFont.footnote)
+                    .foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                rowDivider
                 FormRow(label: "Max heart rate") {
                     VStack(alignment: .trailing, spacing: 6) {
                         HStack(spacing: 8) {
@@ -276,6 +293,66 @@ struct SettingsView: View {
             Stepper("Height in inches", value: inches, in: 47...91, step: 1)
                 .labelsHidden()
                 .accessibilityLabel("Height, \(parts.feet) feet \(parts.inches) inches")
+        }
+    }
+
+    /// Metric waist entry: 0 = unset (shows a muted "Not set" rather than a misleading 0 cm). Steps in
+    /// 1-cm increments; the first increment from unset lands at a sensible 80 cm so the stepper doesn't
+    /// crawl up from the range floor. Mirrors `measureField` but tolerant of the optional empty state.
+    private func waistCentimetresField(waistCm: Binding<Double>) -> some View {
+        let set = waistCm.wrappedValue > 0
+        return HStack(spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(set ? String(format: "%.0f", waistCm.wrappedValue) : "Not set")
+                    .font(StrandFont.bodyNumber)
+                    .foregroundStyle(set ? StrandPalette.textPrimary : StrandPalette.textTertiary)
+                    .frame(minWidth: 48, alignment: .trailing)
+                if set {
+                    Text("cm")
+                        .font(StrandFont.caption)
+                        .foregroundStyle(StrandPalette.textTertiary)
+                }
+            }
+            Stepper("Waist in centimetres") {
+                waistCm.wrappedValue = min(160, (set ? waistCm.wrappedValue : 79) + 1)
+            } onDecrement: {
+                // Stepping below the 60-cm floor clears it back to unset (optional).
+                let next = waistCm.wrappedValue - 1
+                waistCm.wrappedValue = next < 60 ? 0 : next
+            }
+                .labelsHidden()
+                .accessibilityLabel(set ? "Waist, \(Int(waistCm.wrappedValue.rounded())) centimetres" : "Waist not set")
+        }
+    }
+
+    /// Imperial waist entry: 0 = unset (muted "Not set"); otherwise shows whole inches and stores the cm
+    /// equivalent — the same metric/imperial treatment as Height. First increment from unset lands near a
+    /// sensible 31″. Range mirrors the metric 60…160 cm (≈24…63 in).
+    private func waistInchesField(waistCm: Binding<Double>) -> some View {
+        let set = waistCm.wrappedValue > 0
+        let inches = set ? UnitFormatter.cmToInches(waistCm.wrappedValue).rounded() : 0
+        return HStack(spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(set ? "\(Int(inches))" : "Not set")
+                    .font(StrandFont.bodyNumber)
+                    .foregroundStyle(set ? StrandPalette.textPrimary : StrandPalette.textTertiary)
+                    .frame(minWidth: 48, alignment: .trailing)
+                if set {
+                    Text("in")
+                        .font(StrandFont.caption)
+                        .foregroundStyle(StrandPalette.textTertiary)
+                }
+            }
+            Stepper("Waist in inches") {
+                let nextIn = (set ? inches : 30) + 1
+                waistCm.wrappedValue = min(160, nextIn * UnitFormatter.centimetersPerInch)
+            } onDecrement: {
+                let nextIn = inches - 1
+                // Stepping below the ~24″ floor clears it back to unset (optional).
+                waistCm.wrappedValue = nextIn < 24 ? 0 : nextIn * UnitFormatter.centimetersPerInch
+            }
+                .labelsHidden()
+                .accessibilityLabel(set ? "Waist, \(Int(inches)) inches" : "Waist not set")
         }
     }
 

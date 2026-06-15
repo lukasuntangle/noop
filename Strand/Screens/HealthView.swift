@@ -41,6 +41,10 @@ struct HealthView: View {
                     // so the ~1Hz HR stream re-renders only this subtree — the static
                     // vitals grid below does not re-render on each HR tick.
                     HeartRateSection()
+                    // Fitness Age (weekly, computed by IntelligenceEngine and read back from the
+                    // "fitness_age" metricSeries). Its own view depending only on `repo`/`profile`,
+                    // so the live HR stream never re-renders it.
+                    FitnessAgeSection()
                     // Screen-5 recovery detail: the CONTRIBUTORS to today's recovery as
                     // labelled progress bars (HRV / Resting HR / Sleep / Respiratory), each
                     // scored against the on-device baseline. Depends only on `repo`.
@@ -476,6 +480,324 @@ private struct ContributorBar: View {
         .onChangeCompat(of: strength) { _ in
             if reduceMotion { drawn = fraction }
             else { withAnimation(.easeOut(duration: 0.6)) { drawn = fraction } }
+        }
+    }
+}
+
+// MARK: - Fitness Age
+
+/// The "Fitness Age" section: a weekly, on-device fitness comparison (NOT a biological age) computed by
+/// IntelligenceEngine from the Nes/HUNT model and read back from the "fitness_age" metricSeries under the
+/// strap source. Depends only on `repo` (the weekly value + the recent dailies that drive the readiness
+/// checklist) and `profile` (age/sex/waist), so the ~1Hz live HR stream never re-renders it.
+///
+/// Two states, both honest about coverage:
+///   • a value exists → a scenic hero "Fitness Age N" + a younger/older-than-your-age subtitle and a faint
+///     ±band caption, tappable through to the metric's full trend, with an "ⓘ How accurate is this?"
+///     affordance that reveals the readiness checklist.
+///   • no value yet → the checklist card directly, with required-missing inputs deep-linking to Settings.
+///
+/// The checklist groups inputs by ROLE exactly as the engine reports them: "Drives your Fitness Age"
+/// (age/sex/resting-HR/activity) vs "Unlocks your VO₂max" (height+weight/waist) — never implying the body
+/// measurements sharpen the age (the body term cancels in the model).
+private struct FitnessAgeSection: View {
+    @EnvironmentObject var repo: Repository
+    @EnvironmentObject var profile: ProfileStore
+
+    /// Latest weekly Fitness Age (years) read from the "fitness_age" metricSeries, nil until loaded/computed.
+    @State private var fitnessAge: Double?
+    /// Latest estimated VO₂max (ml/kg/min) from "vo2max_est" — only present once a waist is set.
+    @State private var vo2max: Double?
+    @State private var loaded = false
+
+    /// Reveal the readiness checklist (the "ⓘ How accurate is this?" disclosure under a shown value).
+    @State private var showReadiness = false
+    /// Present the full metric trend (the existing MetricDetailView for "fitness_age") in a sheet —
+    /// these shared screens aren't hosted in a per-screen NavigationStack, so a sheet is the in-app
+    /// drill-down idiom here (mirrors StressView opening Breathe in a sheet).
+    @State private var showTrend = false
+    /// Present Settings (the profile card) in a sheet so a required-missing input can be filled in place.
+    @State private var showSettings = false
+
+    /// The catalog descriptor backing the trend sheet + accent.
+    private var fitnessAgeMetric: MetricDescriptor? { MetricCatalog.all.first { $0.key == "fitness_age" } }
+
+    /// Build the readiness verdict from the same signals IntelligenceEngine feeds the engine: the last 7
+    /// computed/imported days give the resting-HR + activity coverage counts; the profile gives the rest.
+    private var readiness: FitnessAgeReadiness {
+        let last7 = repo.days.suffix(7)
+        let rhrDays = last7.compactMap { $0.restingHr }.count
+        let activityDays = last7.compactMap { $0.strain }.count
+        return FitnessAgeEngine.assessReadiness(
+            hasAge: profile.age > 0,
+            hasSex: !profile.sex.isEmpty,
+            rhrDays: rhrDays,
+            activityDays: activityDays,
+            hasHeightWeight: profile.heightCm > 0 && profile.weightKg > 0,
+            hasWaist: profile.waistCm > 0)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: NoopMetrics.gap) {
+            SectionHeader("Fitness Age", overline: "Weekly",
+                          trailing: fitnessAge != nil ? "vs age \(profile.age)" : nil)
+            content
+        }
+        .sheet(isPresented: $showTrend) {
+            if let metric = fitnessAgeMetric {
+                NavigationStack { MetricDetailView(metric: metric) }
+            }
+        }
+        .sheet(isPresented: $showSettings) {
+            NavigationStack { SettingsView() }
+        }
+        .task(id: repo.refreshSeq) { await load() }
+    }
+
+    @ViewBuilder private var content: some View {
+        if let age = fitnessAge {
+            heroCard(age: age)
+            if showReadiness {
+                ReadinessChecklistCard(readiness: readiness,
+                                       lead: nil,
+                                       onFix: { showSettings = true })
+                    .transition(.opacity)
+            }
+        } else if loaded {
+            // No value yet: lead with the checklist so the user sees exactly what's still needed.
+            ReadinessChecklistCard(
+                readiness: readiness,
+                lead: readiness.canCompute
+                    ? "A few more days and we can show your Fitness Age."
+                    : "A few more days of wear — plus the basics below — and we can show your Fitness Age.",
+                onFix: { showSettings = true })
+        } else {
+            // Brief read of the weekly value; honest placeholder rather than an empty gap.
+            ComingSoon(what: "Reading your Fitness Age…", symbol: "figure.run")
+        }
+    }
+
+    /// The shown-value hero: a scenic Charge-world backdrop, the big Fitness Age number, a
+    /// younger/older-than-your-age subtitle, the optional VO₂max, the ±band disclaimer, and the two
+    /// affordances (tap-through to the trend + the "How accurate is this?" disclosure).
+    private func heroCard(age: Double) -> some View {
+        let shown = Int(age.rounded())
+        let delta = Double(profile.age) - age        // +ve = fitness age younger than chronological
+        let years = Int(abs(delta).rounded())
+        let younger = delta >= 0
+        return VStack(alignment: .leading, spacing: 14) {
+            // Tap the hero body to open the full "fitness_age" trend.
+            Button { showTrend = true } label: {
+                HStack(alignment: .center, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Fitness Age").strandOverline()
+                        Text("\(shown)")
+                            .font(StrandFont.display(64))
+                            .foregroundStyle(StrandPalette.gold)
+                            .contentTransition(.numericText())
+                        Text(years == 0
+                             ? "About the same as your age"
+                             : "\(years) year\(years == 1 ? "" : "s") \(younger ? "younger" : "older") than your age")
+                            .font(StrandFont.subhead)
+                            .foregroundStyle(younger ? StrandPalette.statusPositive : StrandPalette.statusWarning)
+                    }
+                    Spacer(minLength: 0)
+                    if let vo2 = vo2max {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("VO₂max").strandOverline()
+                            Text(String(format: "%.0f", vo2))
+                                .font(StrandFont.number(30))
+                                .foregroundStyle(StrandPalette.metricCyan)
+                            Text("ml/kg/min")
+                                .font(StrandFont.footnote)
+                                .foregroundStyle(StrandPalette.textTertiary)
+                        }
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(StrandPalette.textTertiary)
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Fitness Age \(shown), \(years) year\(years == 1 ? "" : "s") \(younger ? "younger" : "older") than your age. Tap to see the trend.")
+
+            Text("± \(Int(FitnessAgeEngine.displayBandYears)) yr · a fitness comparison, not a biological age")
+                .font(StrandFont.footnote)
+                .foregroundStyle(StrandPalette.textTertiary)
+
+            Divider().overlay(StrandPalette.hairline)
+
+            // The honest disclosure: what we have / what we still need, grouped by what it unlocks.
+            Button {
+                withAnimation(StrandMotion.interactive) { showReadiness.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(StrandPalette.accent)
+                        .accessibilityHidden(true)
+                    Text("How accurate is this?")
+                        .font(StrandFont.subhead)
+                        .foregroundStyle(StrandPalette.textPrimary)
+                    Spacer()
+                    Image(systemName: showReadiness ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(StrandPalette.textTertiary)
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("How accurate is this? \(showReadiness ? "Hide" : "Show") the data behind your Fitness Age")
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ScenicHeroBackground(domain: .charge)
+                .clipShape(RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous))
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous)
+                .strokeBorder(StrandPalette.gold.opacity(0.18), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: NoopMetrics.cardRadius, style: .continuous))
+    }
+
+    /// Load the latest weekly Fitness Age (+ optional VO₂max) from the strap's metricSeries. Uses the
+    /// same `exploreSeries(key:source:)` path every other metric on this screen reads, with source
+    /// "my-whoop" (the Repository merges the computed "-noop" rows under any real import). Takes the
+    /// freshest point — the weekly value is keyed to the week's Saturday and refines through the week.
+    private func load() async {
+        let faPts = await repo.exploreSeries(key: "fitness_age", source: "my-whoop")
+        let vo2Pts = await repo.exploreSeries(key: "vo2max_est", source: "my-whoop")
+        fitnessAge = faPts.last?.value
+        vo2max = vo2Pts.last?.value
+        loaded = true
+    }
+}
+
+/// The readiness checklist card: an optional lead line, then the engine's `items` as ✓/⚠/○ rows with
+/// their `detail` text, GROUPED by `.role` into "Drives your Fitness Age" and "Unlocks your VO₂max".
+/// A required-but-missing input shows a "Fix in Settings" affordance (the engine's required+missing
+/// rows are age/sex; resting-HR can only be earned by wearing the strap, so it gets no fix button).
+private struct ReadinessChecklistCard: View {
+    let readiness: FitnessAgeReadiness
+    /// Optional intro line shown above the groups (e.g. the "a few more days" no-value message).
+    let lead: LocalizedStringKey?
+    /// Invoked when the user taps a required-missing row's "Fix in Settings".
+    let onFix: () -> Void
+
+    private var drivesAge: [FitnessReadinessItem] { readiness.items.filter { $0.role == .drivesAge } }
+    private var unlocksVO2: [FitnessReadinessItem] { readiness.items.filter { $0.role == .unlocksVO2max } }
+
+    var body: some View {
+        NoopCard(tint: StrandPalette.chargeColor) {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 10) {
+                    confidencePill
+                    Spacer(minLength: 0)
+                }
+                if let lead {
+                    Text(lead)
+                        .font(StrandFont.subhead)
+                        .foregroundStyle(StrandPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                group(title: "Drives your Fitness Age", items: drivesAge)
+                group(title: "Unlocks your VO₂max", items: unlocksVO2)
+                Text("Built from published methods (Nes/HUNT) on \(Platform.deviceNounPhrase). It's a fitness comparison against an average peer your age — not a biological or medical age.")
+                    .font(StrandFont.footnote)
+                    .foregroundStyle(StrandPalette.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// The overall confidence chip, mapped onto the existing score-lifecycle pill vocabulary.
+    @ViewBuilder private var confidencePill: some View {
+        switch readiness.confidence {
+        case .ready:    ScoreStatePill(.solid, text: "Ready")
+        case .estimate: ScoreStatePill(.building, text: "Estimate — partial data")
+        case .notReady: ScoreStatePill(.calibrating, text: "Not enough data yet")
+        }
+    }
+
+    @ViewBuilder
+    private func group(title: LocalizedStringKey, items: [FitnessReadinessItem]) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(title).strandOverline()
+                ForEach(items, id: \.key) { item in
+                    readinessRow(item)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func readinessRow(_ item: FitnessReadinessItem) -> some View {
+        // A required/optional input that's still unsatisfied earns a "Fix in Settings" affordance, but
+        // only when it's actually fixable there (age/sex/body metrics/waist) — resting-HR and activity
+        // coverage come from wearing the strap, so those get no fix button.
+        let fixable = item.status != .satisfied
+            && (item.key == "age" || item.key == "sex" || item.key == "bodyMetrics" || item.key == "waist")
+        let row = HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Image(systemName: statusIcon(item.status))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(statusColor(item.status))
+                .frame(width: 18)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.label)
+                    .font(StrandFont.body)
+                    .foregroundStyle(StrandPalette.textPrimary)
+                Text(item.detail)
+                    .font(StrandFont.footnote)
+                    .foregroundStyle(StrandPalette.textTertiary)
+            }
+            Spacer(minLength: 0)
+            if fixable {
+                Button(action: onFix) {
+                    Text("Fix in Settings")
+                        .font(StrandFont.footnote.weight(.semibold))
+                        .foregroundStyle(StrandPalette.accent)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(item.label): \(item.detail). Fix in Settings.")
+            }
+        }
+        // When a Fix button is present keep it as its own VoiceOver stop (.contain); otherwise fold the
+        // whole row into one labelled stop. Two branches so we never pass a nil accessibility label.
+        if fixable {
+            row.accessibilityElement(children: .contain)
+        } else {
+            row
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(item.label), \(statusWord(item.status)). \(item.detail)")
+        }
+    }
+
+    private func statusIcon(_ s: FitnessReadinessStatus) -> String {
+        switch s {
+        case .satisfied: return "checkmark.circle.fill"
+        case .partial:   return "exclamationmark.triangle.fill"
+        case .missing:   return "circle"
+        }
+    }
+    private func statusColor(_ s: FitnessReadinessStatus) -> Color {
+        switch s {
+        case .satisfied: return StrandPalette.statusPositive
+        case .partial:   return StrandPalette.statusWarning
+        case .missing:   return StrandPalette.textTertiary
+        }
+    }
+    private func statusWord(_ s: FitnessReadinessStatus) -> String {
+        switch s {
+        case .satisfied: return "ready"
+        case .partial:   return "partial"
+        case .missing:   return "missing"
         }
     }
 }

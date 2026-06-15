@@ -442,6 +442,30 @@ object IntelligenceEngine {
         // this only fills the days the strap collected but no import covered.
         if (dailies.isNotEmpty()) repo.upsertDailyMetrics(dailies)
         if (restRows.isNotEmpty()) repo.upsertMetricSeries(restRows)
+
+        // ── Fitness Age (Phase 2) — weekly, keyed to the week's Saturday ──
+        val fa7 = dailies.sortedBy { it.day }.takeLast(7)
+        val faRHRs = fa7.mapNotNull { it.restingHr }.map { it.toDouble() }
+        val faActiveStrains = fa7.mapNotNull { it.strain }.filter { it >= 30.0 }
+        val faMeanActiveStrain = if (faActiveStrains.isEmpty()) 0.0 else faActiveStrains.average()
+        val faWaist = if (profile.waistCm > 0) profile.waistCm else null
+        val faReady = FitnessAgeEngine.assessReadiness(
+            hasAge = profile.age > 0, hasSex = profile.sex.isNotEmpty(),
+            rhrDays = faRHRs.size, activityDays = fa7.mapNotNull { it.strain }.size,
+            hasHeightWeight = profile.heightCm > 0 && profile.weightKg > 0, hasWaist = faWaist != null)
+        if (faReady.canCompute) {
+            val faRes = FitnessAgeEngine.compute(
+                age = profile.age, sex = profile.sex,
+                restingHR = medianOfDoubles(faRHRs),
+                paIndex = FitnessAgeEngine.physicalActivityIndexFromStrain(faActiveStrains.size, faMeanActiveStrain),
+                waistCm = faWaist)
+            if (faRes != null) {
+                val satKey = saturdayKeyOnOrBefore(newestDay)
+                val faPts = mutableListOf(MetricSeriesRow(deviceId = computedId, day = satKey, key = "fitness_age", value = faRes.fitnessAge))
+                faRes.vo2max?.let { faPts.add(MetricSeriesRow(deviceId = computedId, day = satKey, key = "vo2max_est", value = it)) }
+                repo.upsertMetricSeries(faPts)
+            }
+        }
         // DURABILITY GUARD (iOS PR #395 cachedSleepKept): drop any freshly-detected session that
         // time-overlaps a night the user has already hand-corrected. A detected onset can drift
         // second-to-second as more raw data arrives, so without this the re-detected night would upsert
@@ -571,6 +595,17 @@ object IntelligenceEngine {
         val r = if (scaled >= 0) Math.floor(scaled + 0.5) else Math.ceil(scaled - 0.5)
         return r / 100.0
     }
+
+    private fun medianOfDoubles(xs: List<Double>): Double {
+        if (xs.isEmpty()) return 0.0
+        val s = xs.sorted(); val n = s.size
+        return if (n % 2 == 1) s[n / 2] else (s[n / 2 - 1] + s[n / 2]) / 2.0
+    }
+    private fun saturdayKeyOnOrBefore(dayStr: String): String = try {
+        val d = java.time.LocalDate.parse(dayStr)               // yyyy-MM-dd
+        val back = (d.dayOfWeek.value + 1) % 7                  // SAT->0, SUN->1, MON->2 ... FRI->6
+        d.minusDays(back.toLong()).toString()
+    } catch (e: Exception) { dayStr }
 
     /**
      * Resolve the SINGLE device that owns [day] (invariant I2), so the day is scored from exactly one

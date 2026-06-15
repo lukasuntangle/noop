@@ -46,6 +46,12 @@ data class UserProfile(
      * divides by this. 1.0 = raw pass-through (default); the engine clamps ≥ 0.5.
      */
     val stepTicksPerStep: Double = 1.0,
+    /**
+     * Waist circumference (cm) for the Fitness Age VO₂max estimate (Phase 2). 0 = not set.
+     * Optional — it UNLOCKS the VO₂max readout but does NOT sharpen the headline Fitness Age
+     * (the body term cancels out of the age formula). Default param so existing call-sites compile.
+     */
+    val waistCm: Double = 0.0,
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

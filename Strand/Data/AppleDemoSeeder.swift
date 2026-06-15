@@ -197,6 +197,23 @@ enum AppleDemoSeeder {
             }
         }
 
+        // --- weekly Fitness Age + VO2max estimate (the engine stamps these on each week's
+        //     Saturday; mirror that here so the Fitness Age screen renders under --demo-seed).
+        //     Trends from ~42 → ~36 (younger) as the demo "fitness" drift climbs; vo2max ~44 → ~50.
+        var fitnessAge = 42.0
+        var vo2 = 44.0
+        for i in 0..<DAYS {
+            let date = cal.date(byAdding: .day, value: i, to: startDay)!
+            guard cal.component(.weekday, from: date) == 7 else { continue }  // 7 = Saturday
+            let day = isoFmt.string(from: date)
+            series.append(MetricPoint(day: day, key: "fitness_age",
+                value: round1((fitnessAge + gauss(&rng, 0.0, 0.3)).clamped(34.0, 44.0))))
+            series.append(MetricPoint(day: day, key: "vo2max_est",
+                value: round1((vo2 + gauss(&rng, 0.0, 0.4)).clamped(42.0, 52.0))))
+            fitnessAge -= 0.75  // ~6 yr younger across the 8 seeded Saturdays
+            vo2 += 0.75
+        }
+
         _ = try await store.upsertDailyMetrics(daily, deviceId: whoop)
         _ = try await store.upsertSleepSessions(sleeps, deviceId: whoop)
         _ = try await store.upsertMetricSeries(series, deviceId: whoop)

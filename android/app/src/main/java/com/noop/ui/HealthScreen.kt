@@ -49,6 +49,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.noop.analytics.Baselines
+import com.noop.analytics.FitnessAgeEngine
+import com.noop.analytics.FitnessAgeReadiness
+import com.noop.analytics.FitnessReadinessItem
+import com.noop.analytics.FitnessReadinessRole
+import com.noop.analytics.FitnessReadinessStatus
 import com.noop.analytics.VitalBands
 import com.noop.ble.LiveState
 import com.noop.data.DailyMetric
@@ -112,6 +117,11 @@ fun HealthScreen(vm: AppViewModel, onVitalClick: (String) -> Unit = {}) {
                 onVitalClick = onVitalClick,
                 captionMode = VitalCaptionMode.AS_OF,
             )
+            // FITNESS AGE — the weekly Saturday number from the engine (resting HR + activity vs your
+            // age), with an honest readiness checklist behind a tap. Authoritative value comes from the
+            // metricSeries the IntelligenceEngine writes; readiness is derived from what this screen sees.
+            Spacer(Modifier.height(Metrics.selectorTopUp))
+            FitnessAgeSection(vm = vm, days = days, profile = profile)
             // CONTRIBUTORS (README screen #5, recovery detail) — the signals behind recovery as
             // labelled progress bars in the shared stage/zone bar style, mirroring Today's section.
             Spacer(Modifier.height(Metrics.selectorTopUp))
@@ -219,6 +229,257 @@ private fun DrawScope.drawContributorFill(color: Color, frac: Float) {
     val r = size.height / 2f
     drawRoundRect(color = color, size = Size(w, size.height), cornerRadius = CornerRadius(r, r))
 }
+
+// MARK: - Fitness Age
+//
+// The on-device "Fitness Age": a weekly number (the engine keys it to each week's Saturday) that maps
+// resting HR + recent activity against population norms for your age. The AUTHORITATIVE value is the
+// latest "fitness_age" the IntelligenceEngine writes into metricSeries under the computed "-noop"
+// source — this section only READS it; it never recomputes the headline. Honest framing throughout:
+// it's a fitness comparison (± 5 yr band), never a biological age, and weight/height/waist live under
+// "Unlocks your VO₂max", never as if they sharpen the age. When no value exists yet we show the
+// readiness checklist instead, so the user knows exactly what's still needed.
+
+/** The computed ("-noop") source the IntelligenceEngine persists fitness_age + vo2max_est under, the
+ *  same convention every screen uses for on-device-computed series (imported is plain "my-whoop"). */
+private const val COMPUTED_SOURCE = "my-whoop-noop"
+
+@Composable
+private fun FitnessAgeSection(vm: AppViewModel, days: List<DailyMetric>, profile: ProfileStore) {
+    // Latest weekly value + its optional VO₂max companion, read once (metricSeries has no Flow, so we
+    // re-read whenever the merged history changes — a fresh sync/import is what moves these).
+    var fitnessAge by remember { mutableStateOf<Double?>(null) }
+    var vo2max by remember { mutableStateOf<Double?>(null) }
+    LaunchedEffect(days) {
+        val fa = runCatching {
+            vm.repo.metricSeries(COMPUTED_SOURCE, "fitness_age", "0000-01-01", "9999-12-31")
+        }.getOrDefault(emptyList()).lastOrNull()?.value
+        val vo2 = runCatching {
+            vm.repo.metricSeries(COMPUTED_SOURCE, "vo2max_est", "0000-01-01", "9999-12-31")
+        }.getOrDefault(emptyList()).lastOrNull()?.value
+        fitnessAge = fa
+        vo2max = vo2
+    }
+
+    // Readiness from what THIS screen can see: the last 7 merged daily rows. RHR coverage drives the
+    // age; activity (a scored strain day) is an enrichment signal; height/weight/waist sit under the
+    // VO₂max role. Age/sex come from the profile. Approximate by design — the weekly value is the
+    // authority; this just explains the gaps.
+    val readiness = remember(days, profile.age, profile.sex, profile.waistCm) {
+        val last7 = days.takeLast(7)
+        val rhrDays = last7.count { it.restingHr != null }
+        val activityDays = last7.count { it.strain != null }
+        FitnessAgeEngine.assessReadiness(
+            hasAge = profile.age > 0,
+            hasSex = profile.sex.isNotBlank(),
+            rhrDays = rhrDays,
+            activityDays = activityDays,
+            hasHeightWeight = profile.heightCm > 0 && profile.weightKg > 0,
+            hasWaist = profile.waistCm > 0,
+        )
+    }
+
+    var showChecklist by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Metrics.gap)) {
+        SectionHeader("Fitness Age", overline = "Weekly", trailing = "± 5 yr")
+        val value = fitnessAge
+        if (value != null) {
+            FitnessAgeHero(
+                fitnessAge = value,
+                chronoAge = profile.age,
+                vo2max = vo2max,
+                onHowAccurate = { showChecklist = !showChecklist },
+                checklistOpen = showChecklist,
+            )
+            if (showChecklist) {
+                FitnessReadinessCard(readiness = readiness, headed = false)
+            }
+        } else {
+            // No weekly value yet — surface the checklist directly so the user knows what's pending.
+            FitnessReadinessCard(readiness = readiness, headed = true)
+        }
+    }
+}
+
+/** The hero tile: a big Fitness Age number on the gold Charge world, the younger/older read-out, an
+ *  optional VO₂max chip, the honest ± band caption, and a "How accurate is this?" toggle. */
+@Composable
+private fun FitnessAgeHero(
+    fitnessAge: Double,
+    chronoAge: Int,
+    vo2max: Double?,
+    onHowAccurate: () -> Unit,
+    checklistOpen: Boolean,
+) {
+    val shown = fitnessAge.roundToInt()
+    // Delta vs the user's actual age: younger when the fitness age is below it. abs() drives the words.
+    val deltaYears = (chronoAge - fitnessAge).roundToInt()
+    val younger = fitnessAge < chronoAge
+    val deltaWord = when {
+        deltaYears == 0 -> "About your age"
+        younger -> "$deltaYears ${yearWord(deltaYears)} younger than your age"
+        else -> "${kotlin.math.abs(deltaYears)} ${yearWord(deltaYears)} older than your age"
+    }
+
+    NoopCard(tint = Palette.chargeColor) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Overline("Fitness Age")
+                    Text(
+                        text = "$shown",
+                        style = NoopType.display(56f),
+                        color = Palette.chargeColor,
+                    )
+                    Text(
+                        text = deltaWord,
+                        style = NoopType.subhead,
+                        color = if (deltaYears == 0) Palette.textSecondary
+                        else if (younger) Palette.chargeColor else Palette.statusWarning,
+                    )
+                }
+                if (vo2max != null) {
+                    StatePill(
+                        title = "VO₂max ${vo2max.roundToInt()}",
+                        tone = StrandTone.Accent,
+                        showsDot = false,
+                    )
+                }
+            }
+
+            Text(
+                text = "± 5 yr · a fitness comparison, not a biological age",
+                style = NoopType.footnote,
+                color = Palette.textTertiary,
+            )
+
+            // "How accurate is this?" affordance — toggles the readiness checklist below the hero.
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(Metrics.cornerSm))
+                    .clickable(onClick = onHowAccurate)
+                    .padding(vertical = Metrics.space4)
+                    .semantics { contentDescription = "How accurate is this Fitness Age?" },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Metrics.space6),
+            ) {
+                Text(
+                    "How accurate is this?",
+                    style = NoopType.captionNumber,
+                    color = Palette.accent,
+                )
+                Text(
+                    if (checklistOpen) "▾" else "›",
+                    style = NoopType.captionNumber,
+                    color = Palette.accent,
+                )
+            }
+        }
+    }
+}
+
+/** The readiness checklist card: each input as a ✓ / ⚠ / ○ glyph + its detail, grouped by role into
+ *  "Drives your Fitness Age" and "Unlocks your VO₂max". When [headed] (no value yet) it leads with a
+ *  "a few more days" heading and floats the required-missing items to the top of their group. */
+@Composable
+private fun FitnessReadinessCard(readiness: FitnessAgeReadiness, headed: Boolean) {
+    val drivesAge = readiness.items
+        .filter { it.role == FitnessReadinessRole.DRIVES_AGE }
+        .sortedBy { if (headed) readinessSortKey(it) else 0 }
+    val unlocksVo2 = readiness.items
+        .filter { it.role == FitnessReadinessRole.UNLOCKS_VO2MAX }
+        .sortedBy { if (headed) readinessSortKey(it) else 0 }
+
+    NoopCard(tint = if (headed) Palette.chargeColor else null) {
+        Column(verticalArrangement = Arrangement.spacedBy(Metrics.space16)) {
+            if (headed) {
+                Column(verticalArrangement = Arrangement.spacedBy(Metrics.space4)) {
+                    Text(
+                        "A few more days and we can show your Fitness Age",
+                        style = NoopType.headline,
+                        color = Palette.textPrimary,
+                    )
+                    Text(
+                        "It compares your resting heart rate and recent activity against people your age. " +
+                            "Wear your strap for a full week and it appears here.",
+                        style = NoopType.subhead,
+                        color = Palette.textSecondary,
+                    )
+                }
+            }
+
+            ReadinessGroup(title = "Drives your Fitness Age", items = drivesAge)
+            ReadinessGroup(title = "Unlocks your VO₂max", items = unlocksVo2)
+
+            Text(
+                "Weight, height and waist add a VO₂max estimate — they don't change the Fitness Age itself.",
+                style = NoopType.footnote,
+                color = Palette.textTertiary,
+            )
+        }
+    }
+}
+
+/** Sort key for the headed (no-value-yet) state: required-missing first, then partial, then the rest. */
+private fun readinessSortKey(item: FitnessReadinessItem): Int = when {
+    item.required && item.status == FitnessReadinessStatus.MISSING -> 0
+    item.status == FitnessReadinessStatus.MISSING -> 1
+    item.status == FitnessReadinessStatus.PARTIAL -> 2
+    else -> 3
+}
+
+@Composable
+private fun ReadinessGroup(title: String, items: List<FitnessReadinessItem>) {
+    if (items.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(Metrics.space8)) {
+        Overline(title)
+        items.forEach { ReadinessRow(it) }
+    }
+}
+
+@Composable
+private fun ReadinessRow(item: FitnessReadinessItem) {
+    val glyph = when (item.status) {
+        FitnessReadinessStatus.SATISFIED -> "✓"
+        FitnessReadinessStatus.PARTIAL -> "⚠"
+        FitnessReadinessStatus.MISSING -> "○"
+    }
+    val glyphColor = when (item.status) {
+        FitnessReadinessStatus.SATISFIED -> Palette.chargeColor
+        FitnessReadinessStatus.PARTIAL -> Palette.statusWarning
+        FitnessReadinessStatus.MISSING -> Palette.textTertiary
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = "${item.label}: ${item.detail}" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Metrics.space10),
+    ) {
+        Text(
+            glyph,
+            style = NoopType.captionNumber,
+            color = glyphColor,
+            modifier = Modifier.width(16.dp),
+        )
+        Text(
+            item.label,
+            style = NoopType.subhead,
+            color = Palette.textPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            item.detail,
+            style = NoopType.footnote,
+            color = Palette.textTertiary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private fun yearWord(years: Int): String = if (kotlin.math.abs(years) == 1) "year" else "years"
 
 @Composable
 fun VitalSignsScreen(vm: AppViewModel, onVitalClick: (String) -> Unit = {}) {

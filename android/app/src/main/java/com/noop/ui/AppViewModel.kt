@@ -467,6 +467,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         age = profileStore.age.toDouble(),
         sex = profileStore.sex,
         stepTicksPerStep = profileStore.stepTicksPerStep,
+        waistCm = profileStore.waistCm,
     )
 
     // MARK: - HR smoothing (median filter)

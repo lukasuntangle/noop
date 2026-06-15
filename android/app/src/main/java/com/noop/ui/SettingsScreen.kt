@@ -127,6 +127,16 @@ class ProfileStore(private val prefs: SharedPreferences) {
         get() = prefs.getFloat(KEY_HEIGHT, 178f).toDouble().coerceIn(HEIGHT_MIN, HEIGHT_MAX)
         set(v) = prefs.edit().putFloat(KEY_HEIGHT, v.coerceIn(HEIGHT_MIN, HEIGHT_MAX).toFloat()).apply()
 
+    /**
+     * Waist circumference in cm; 0 = unset (the Fitness Age VO₂max estimate is hidden until a waist
+     * is entered). Optional — it only unlocks the VO₂max read-out and never moves the headline Fitness
+     * Age (the engine's body term cancels). No coercion floor (0 has to remain a sentinel for "unset");
+     * the upper bound is clamped so a fat-fingered entry can't run away.
+     */
+    var waistCm: Double
+        get() = prefs.getFloat(KEY_WAIST, 0f).toDouble().coerceIn(0.0, WAIST_MAX)
+        set(v) = prefs.edit().putFloat(KEY_WAIST, v.coerceIn(0.0, WAIST_MAX).toFloat()).apply()
+
     /** Manual max-heart-rate override in bpm; 0 = automatic (Tanaka). */
     var hrMaxOverride: Int
         get() = prefs.getInt(KEY_HRMAX, 0).coerceIn(0, 230)
@@ -155,6 +165,7 @@ class ProfileStore(private val prefs: SharedPreferences) {
         private const val KEY_SEX = "sex"
         private const val KEY_WEIGHT = "weight_kg"
         private const val KEY_HEIGHT = "height_cm"
+        private const val KEY_WAIST = "waist_cm"
         private const val KEY_HRMAX = "hr_max_override"
         private const val KEY_STEP_SCALE = "step_ticks_per_step"
 
@@ -164,6 +175,7 @@ class ProfileStore(private val prefs: SharedPreferences) {
         private const val WEIGHT_MAX = 250.0
         private const val HEIGHT_MIN = 120.0
         private const val HEIGHT_MAX = 230.0
+        private const val WAIST_MAX = 200.0
         private const val STEP_SCALE_MIN = 0.5
         private const val STEP_SCALE_MAX = 30.0
 
@@ -409,6 +421,49 @@ fun SettingsScreen(vm: AppViewModel) {
                             accessibility = "Height in centimetres",
                             onMinus = { mutate { profile.heightCm -= 1 } },
                             onPlus = { mutate { profile.heightCm += 1 } },
+                        )
+                    }
+                }
+                RowDivider()
+                // Waist (optional): the one extra body measure that unlocks the Fitness Age VO₂max
+                // estimate. Unset (0) by design — the headline Fitness Age never needs it — so it shows
+                // "Add" until entered, then steps like Height (inches in imperial, cm in metric).
+                // First tap from unset seeds a typical adult waist rather than 1 cm.
+                FormRow(label = "Waist (optional)") {
+                    Column(horizontalAlignment = Alignment.End) {
+                        val hasWaist = profile.waistCm > 0.0
+                        if (unitSystem == UnitSystem.IMPERIAL) {
+                            val totalInches = UnitFormatter.cmToInches(profile.waistCm).roundToInt()
+                            StepperField(
+                                value = if (hasWaist) "%d″".format(totalInches) else "Add",
+                                accessibility = if (hasWaist) {
+                                    "Waist, $totalInches inches"
+                                } else {
+                                    "Waist, not set — optional, adds your VO₂max estimate"
+                                },
+                                valueColor = if (hasWaist) Palette.textPrimary else Palette.textTertiary,
+                                onMinus = { mutate { profile.waistCm = waistInchesStep(profile.waistCm, up = false) } },
+                                onPlus = { mutate { profile.waistCm = waistInchesStep(profile.waistCm, up = true) } },
+                            )
+                        } else {
+                            StepperField(
+                                value = if (hasWaist) "%.0f".format(profile.waistCm) else "Add",
+                                unit = if (hasWaist) "cm" else null,
+                                accessibility = if (hasWaist) {
+                                    "Waist in centimetres"
+                                } else {
+                                    "Waist, not set — optional, adds your VO₂max estimate"
+                                },
+                                valueColor = if (hasWaist) Palette.textPrimary else Palette.textTertiary,
+                                onMinus = { mutate { profile.waistCm = waistCmStep(profile.waistCm, up = false) } },
+                                onPlus = { mutate { profile.waistCm = waistCmStep(profile.waistCm, up = true) } },
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = if (hasWaist) "Adds your VO₂max estimate" else "Optional · adds your VO₂max estimate",
+                            style = NoopType.footnote,
+                            color = if (hasWaist) Palette.accent else Palette.textTertiary,
                         )
                     }
                 }
@@ -1300,6 +1355,29 @@ private fun setAppIcon(context: Context, navy: Boolean) {
         else PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
         PackageManager.DONT_KILL_APP,
     )
+}
+
+// MARK: - Waist stepper (optional VO₂max input)
+
+/** A typical adult waist (cm) used as the first value when stepping up from "unset" (0), so the field
+ *  jumps to a sensible starting point rather than 1 cm. ~34" — the rough population midpoint. */
+private const val WAIST_SEED_CM = 86.0
+
+/** Step the waist by one centimetre, seeding [WAIST_SEED_CM] when starting from unset (0). Stepping
+ *  down from the seed cannot go below the seed (it never silently re-enters the "unset" sentinel). */
+private fun waistCmStep(current: Double, up: Boolean): Double {
+    if (current <= 0.0) return if (up) WAIST_SEED_CM else 0.0
+    return (current + if (up) 1.0 else -1.0).coerceAtLeast(WAIST_SEED_CM - 30.0)
+}
+
+/** Step the waist by one inch (entry unit in imperial; stored as cm), seeding [WAIST_SEED_CM] from
+ *  unset. Snaps to whole inches so the up/down sequence is symmetric, mirroring the Height field. */
+private fun waistInchesStep(current: Double, up: Boolean): Double {
+    if (current <= 0.0) return if (up) WAIST_SEED_CM else 0.0
+    val inches = UnitFormatter.cmToInches(current).roundToInt()
+    val nextInches = (inches + if (up) 1 else -1)
+    val nextCm = nextInches * UnitFormatter.CENTIMETERS_PER_INCH
+    return nextCm.coerceAtLeast(WAIST_SEED_CM - 30.0)
 }
 
 // MARK: - Strap status helpers (mirror SettingsView's computed properties)

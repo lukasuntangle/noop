@@ -96,6 +96,8 @@ enum MetricCatalog {
         d("max_hr", "Max Heart Rate", "Heart", "bpm", "my-whoop", "bolt.heart", 0, nil),
         d("energy_kcal", "Calories", "Heart", "kcal", "my-whoop", "flame", 0, nil),
         d("vo2max", "VO₂ Max", "Heart", "", "apple-health", "lungs.fill", 1, true),
+        d("fitness_age", "Fitness Age", "Heart", "yrs", "my-whoop", "figure.run", 0, false),
+        d("vo2max_est", "VO₂ Max (estimated)", "Heart", "", "my-whoop", "lungs", 1, true),
 
         // ── Charge (was Recovery)
         d("recovery", "Charge", "Charge", "%", "my-whoop", "heart.circle", 0, true,

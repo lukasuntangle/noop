@@ -236,6 +236,23 @@ object DemoSeeder {
             }
         }
 
+        // --- weekly Fitness Age + VO2max estimate (the engine stamps these on each week's
+        // Saturday; mirror that here so the Fitness Age screen renders in the demo build).
+        // Trends from ~42 → ~36 (younger) as the demo "fitness" drift climbs; vo2max ~44 → ~50.
+        var fitnessAge = 42.0
+        var vo2 = 44.0
+        for (i in 0 until DAYS) {
+            val date = startDay.plusDays(i.toLong())
+            if (date.dayOfWeek.value != 6) continue // 6 = Saturday
+            val day = date.toString()
+            series.add(MetricSeriesRow(WHOOP, day, "fitness_age",
+                round1((fitnessAge + gauss(rng, 0.0, 0.3)).coerceIn(34.0, 44.0))))
+            series.add(MetricSeriesRow(WHOOP, day, "vo2max_est",
+                round1((vo2 + gauss(rng, 0.0, 0.4)).coerceIn(42.0, 52.0))))
+            fitnessAge -= 0.75 // ~6 yr younger across the 8 seeded Saturdays
+            vo2 += 0.75
+        }
+
         repo.upsertDailyMetrics(daily)
         repo.upsertSleepSessions(sleeps)
         repo.upsertMetricSeries(series)
