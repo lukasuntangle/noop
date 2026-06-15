@@ -18,6 +18,15 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "4.2.2",
+          "buildVersion": "100",
+          "date": "2026-06-15",
+          "localizedDescription": "Sleep stages self-heal after a sync (#449).",
+          "downloadURL": "https://github.com/NoopApp/noop/releases/download/v4.2.2/NOOP-v4.2.2-ios.ipa",
+          "size": 8040518,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "4.2.1",
           "buildVersion": "98",
           "date": "2026-06-15",
@@ -532,12 +541,12 @@
           "NSHealthUpdateUsageDescription": "NOOP writes the metrics it computes from your strap back into Apple Health, on-device and only when you allow it."
         }
       },
-      "version": "4.2.1",
-      "buildVersion": "98",
+      "version": "4.2.2",
+      "buildVersion": "100",
       "versionDate": "2026-06-15",
-      "versionDescription": "Optional inactivity reminder (#419).",
-      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v4.2.1/NOOP-v4.2.1-ios.ipa",
-      "size": 8040479,
+      "versionDescription": "Sleep stages self-heal after a sync (#449).",
+      "downloadURL": "https://github.com/NoopApp/noop/releases/download/v4.2.2/NOOP-v4.2.2-ios.ipa",
+      "size": 8040518,
       "minOSVersion": "17.0"
     }
   ],
