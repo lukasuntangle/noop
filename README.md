@@ -563,6 +563,17 @@ dependencies keep their own licenses (GRDB.swift and ZIPFoundation are MIT — s
 [`NOTICE`](NOTICE)). By opening a pull request you agree your contribution is licensed
 under the same terms — see [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).
 
+### Mirroring & forking
+
+NOOP is public and built to be hard to erase. **Clone it freely** — `git clone https://noop.fans/NoopApp/noop.git` — and you're welcome to **mirror or fork it** to GitHub, Codeberg, GitLab or your own server. More copies make the project more resilient, which is the whole point after being deplatformed.
+
+Two simple asks:
+
+- **Keep it non-commercial** and keep the [`LICENSE`](LICENSE) + `Copyright 2026 NoopApp` notice intact (PolyForm Noncommercial — mirror and use freely, just don't sell it or ship it in a paid product).
+- **Point people back to the canonical home, [noop.fans/NoopApp/noop](https://noop.fans/NoopApp/noop)**, so everyone lands on the current code and releases rather than a stale fork.
+
+That's it — copy away.
+
 ---
 
 ## Docs
