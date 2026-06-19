@@ -18,6 +18,15 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "4.9.0",
+          "buildVersion": "125",
+          "date": "2026-06-19",
+          "localizedDescription": "Steadier live heart rate, durable sleep-delete, step-calibration fix, and a Homebrew install fix.",
+          "downloadURL": "https://noop.fans/NoopApp/noop/releases/download/v4.9.0/NOOP-v4.9.0-ios.ipa",
+          "size": 8405918,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "4.8.0",
           "buildVersion": "124",
           "date": "2026-06-18",
@@ -757,12 +766,12 @@
           "NSHealthUpdateUsageDescription": "NOOP writes the metrics it computes from your strap back into Apple Health, on-device and only when you allow it."
         }
       },
-      "version": "4.8.0",
-      "buildVersion": "124",
-      "versionDate": "2026-06-18",
-      "versionDescription": "On-demand HRV, Haptic Clock, sleep marks, scheduled debug export & a clearer steps screen.",
-      "downloadURL": "https://noop.fans/NoopApp/noop/releases/download/v4.8.0/NOOP-v4.8.0-ios.ipa",
-      "size": 8405022,
+      "version": "4.9.0",
+      "buildVersion": "125",
+      "versionDate": "2026-06-19",
+      "versionDescription": "Steadier live heart rate, durable sleep-delete, step-calibration fix, and a Homebrew install fix.",
+      "downloadURL": "https://noop.fans/NoopApp/noop/releases/download/v4.9.0/NOOP-v4.9.0-ios.ipa",
+      "size": 8405918,
       "minOSVersion": "17.0"
     }
   ],
