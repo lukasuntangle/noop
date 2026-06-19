@@ -19,11 +19,13 @@ import WhoopStore
 public struct MenuBarLabel: View {
     @EnvironmentObject private var repo: Repository
     @EnvironmentObject private var live: LiveState
+    @EnvironmentObject private var model: AppModel
 
     public init() {}
 
-    /// HR to display: reported value when >0, else derived from the latest R-R.
+    /// HR to display: the spike-filtered median (model.bpm, #39) when available, else reported, else R-R.
     private var displayHR: Int? {
+        if let hr = model.bpm, hr > 0 { return hr }
         if let hr = live.heartRate, hr > 0 { return hr }
         if let last = live.rr.last, last > 0 { return Int((60_000.0 / Double(last)).rounded()) }
         return nil
@@ -81,6 +83,7 @@ public struct MenuBarContent: View {
     // MARK: Derived values
 
     private var displayHR: Int? {
+        if let hr = model.bpm, hr > 0 { return hr }        // #39: spike-filtered median, not raw
         if let hr = live.heartRate, hr > 0 { return hr }
         if let last = live.rr.last, last > 0 { return Int((60_000.0 / Double(last)).rounded()) }
         return nil

@@ -203,8 +203,13 @@ class WhoopRepository(private val dao: WhoopDao) {
     /** Remove a sleep session entirely — the delete half of [updateSleepSessionTimes] with no
      *  re-insert. (deviceId, startTs) is the primary key, so it uniquely identifies the row, letting
      *  the user clear a misread or spurious night so the day recomputes without it (#281). */
-    suspend fun deleteSleepSession(session: SleepSession) =
+    suspend fun deleteSleepSession(session: SleepSession) {
         dao.deleteSleepSession(session.deviceId, session.startTs)
+        // #33: record a durable tombstone so the recompute doesn't regenerate this night (mirrors the
+        // dismissedWorkout marker). `endTs` is the span the engine's overlap test uses, since a
+        // re-detected onset can drift second-to-second.
+        dao.insertDismissedSleep(listOf(DismissedSleep(session.deviceId, session.startTs, session.endTs)))
+    }
 
     /** Manually ADD a missed sleep session — typically a daytime NAP the detector didn't pick up (#508).
      *  Port of iOS Repository.addManualNap + MetricsCache.insertManualSleepSession.
@@ -367,6 +372,10 @@ class WhoopRepository(private val dao: WhoopDao) {
     /** Dismissed detected-bout markers for the computed source of [strapDeviceId]. */
     suspend fun dismissedDetected(strapDeviceId: String = "my-whoop"): List<DismissedWorkout> =
         dao.dismissedWorkouts(computedDeviceId(strapDeviceId))
+
+    /** Deleted-sleep tombstones for the computed source of [strapDeviceId] (#33). Mirrors dismissedDetected. */
+    suspend fun dismissedSleeps(strapDeviceId: String = "my-whoop"): List<DismissedSleep> =
+        dao.dismissedSleeps(computedDeviceId(strapDeviceId))
 
     /**
      * Persist a retroactive / edited manual workout under the strap source. [replacing] is the row the

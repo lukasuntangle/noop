@@ -113,8 +113,17 @@ fun StepsCalibrationScreen(
         }
         if (coeff <= 0) return@LaunchedEffect
 
-        val phoneDays = vm.repo.appleDaily(WhoopRepository.APPLE_HEALTH_SOURCE, "0000-01-01", "9999-12-31")
-            .mapNotNull { row -> row.steps?.takeIf { it > 0 }?.let { row.day to it } }
+        // Phone step counts come from apple-health AND, for HC-only users, Health Connect (#37). Both are
+        // stored in appleDaily under their own source; union them with apple-health winning per day.
+        val stepsByDay = LinkedHashMap<String, Int>()
+        for (row in vm.repo.appleDaily(WhoopRepository.APPLE_HEALTH_SOURCE, "0000-01-01", "9999-12-31")) {
+            row.steps?.takeIf { it > 0 }?.let { stepsByDay[row.day] = it }
+        }
+        for (row in vm.repo.appleDaily(WhoopRepository.HEALTH_CONNECT_SOURCE, "0000-01-01", "9999-12-31")) {
+            row.steps?.takeIf { it > 0 }?.let { stepsByDay.putIfAbsent(row.day, it) }
+        }
+        val phoneDays = stepsByDay.entries
+            .map { it.key to it.value }
             .sortedByDescending { it.first }
 
         val cal = StepsEstimateEngine.Calibration(

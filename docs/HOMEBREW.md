@@ -3,14 +3,18 @@
 macOS users install + auto-update NOOP with:
 
 ```bash
-brew tap noopapp/noop
+brew tap noopapp/noop https://noop.fans/NoopApp/homebrew-noop
 brew trust noopapp/noop    # required since Homebrew 6.0.0 (see note below)
 brew install --cask noop
 brew upgrade --cask noop   # later updates
 ```
 
+> **Important — use the full tap URL.** The project is self-hosted, so you must give `brew tap` the
+> explicit `https://noop.fans/NoopApp/homebrew-noop` URL. The short `brew install --cask noopapp/noop/noop`
+> form makes Homebrew assume a GitHub-hosted tap, which doesn't exist — that's why it fails.
+
 The cask lives in the **`NoopApp/homebrew-noop`** tap and points at the macOS `.zip` attached to each
-GitHub Release.
+release on the project's own host.
 
 > **Why `brew trust`?** Since **Homebrew 6.0.0** (June 2026), non-official taps must be explicitly
 > trusted before Homebrew will load their code — otherwise you'll see

@@ -42,6 +42,7 @@ struct StrandApp: App {
                 .environmentObject(model.live)
         } label: {
             MenuBarLabel()
+                .environmentObject(model)
                 .environmentObject(model.repo)
                 .environmentObject(model.live)
         }

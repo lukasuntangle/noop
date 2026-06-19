@@ -301,6 +301,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             var lastBonded = false
             ble.state.collect { state ->
                 state.heartRate?.let { ingestHr(it) }
+                // #39 parity with iOS: clear the smoothed median on a true disconnect (no HR AND no R-R) so the
+                // Health hero falls to "—" rather than freezing on the last value; a transient gap with R-R
+                // still flowing keeps the median (matches AppModel.ingestHR's disconnect guard).
+                if (state.heartRate == null && state.rr.isEmpty()) resetSmoothing()
                 coachZone(state)
                 if (state.bonded && !lastBonded) {
                     if (_smartAlarmEnabled.value) applySmartAlarm()

@@ -298,7 +298,14 @@ final class AppModel: ObservableObject {
             let v = 60_000.0 / Double(rr)
             if v >= 30, v <= 220 { inst = v }
         }
-        guard let inst else { return }
+        guard let inst else {
+            // #39: when the live source is gone (disconnect blanks heartRate AND rr), drop the stale
+            // median so screens that now prefer `bpm` fall through to "—" instead of freezing on the
+            // last value. Mirrors Android (_bpm = null on disconnect). A transient out-of-range sample
+            // with the link still up (heartRate or rr still present) keeps the last median.
+            if live.heartRate == nil && live.rr.isEmpty { resetSmoothing() }
+            return
+        }
         let now = Date()
         hrWindow.append((now, inst))
         hrWindow.removeAll { now.timeIntervalSince($0.t) > 10 }   // ~10s window

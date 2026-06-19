@@ -7,7 +7,7 @@ enum AppChangelog {
 
     /// Bump this when you add a release below. The "What's New" sheet shows automatically when the
     /// stored last-seen version is behind this. (Decoupled from the bundle version on purpose.)
-    static let currentVersion = "4.8.0"
+    static let currentVersion = "4.9.0"
 
     struct Release: Identifiable {
         let version: String
@@ -19,6 +19,14 @@ enum AppChangelog {
 
     /// Newest first.
     static let releases: [Release] = [
+        Release(
+            version: "4.9.0",
+            title: "Steadier heart rate + a stack of fixes",
+            date: "June 2026",
+            items: [
+                "**Steadier live heart rate.** The Health tab and the Mac menu bar now show the same spike-filtered reading as the Live screen, so a brief sensor blip no longer flashes a wild number like 170+. (Thanks @ryanbr and @bringiton321 — #39.)",
+                "**Homebrew install fixed (macOS).** `brew install` works again — the tap command now points at the project's self-hosted home; the old short form pointed at a host that no longer serves it. See the README for the one-line command. (Thanks @tonyjacked — #44.)",
+            ]),
         Release(
             version: "4.8.0",
             title: "On-demand HRV, a haptic clock, sleep marks & more",

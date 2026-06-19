@@ -39,12 +39,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         JournalEntry::class,
         WorkoutRow::class,
         DismissedWorkout::class,
+        DismissedSleep::class,
         AppleDaily::class,
         PpgHrSample::class,
         PairedDeviceRow::class,
         DayOwnershipRow::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false,
 )
 abstract class WhoopDatabase : RoomDatabase() {
@@ -223,6 +224,23 @@ abstract class WhoopDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v9 -> v10: ADDITIVE — adds the `dismissedSleep` tombstone table (#33): a durable marker that
+         * keeps a user-DELETED computed sleep night from regenerating on the next recompute. CREATE TABLE
+         * only (no data touched), so already-offloaded raw streams survive. The SQL MUST match Room's
+         * generated schema for [DismissedSleep] exactly — all three columns NOT NULL, composite PRIMARY
+         * KEY (deviceId, startTs) in declaration order. Mirrors MIGRATION_4_5 (the dismissedWorkout table).
+         */
+        internal val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `dismissedSleep` (`deviceId` TEXT NOT NULL, " +
+                        "`startTs` INTEGER NOT NULL, `endTs` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`deviceId`, `startTs`))",
+                )
+            }
+        }
+
         private fun build(appContext: Context): WhoopDatabase =
             Room.databaseBuilder(appContext, WhoopDatabase::class.java, DB_NAME)
                 // Real additive migration — NO destructive fallback (see the class doc): with
@@ -230,7 +248,7 @@ abstract class WhoopDatabase : RoomDatabase() {
                 // history on any schema mismatch. Room throws loudly instead; CI guards the SQL.
                 .addMigrations(
                     MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5,
-                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10,
                 )
                 .build()
     }

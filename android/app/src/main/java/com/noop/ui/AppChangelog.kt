@@ -25,7 +25,7 @@ object AppChangelog {
      * Bump this when you add a release below. The "What's New" sheet shows automatically when the
      * stored last-seen version is behind this. (Decoupled from the bundle version on purpose.)
      */
-    const val CURRENT_VERSION = "4.8.0"
+    const val CURRENT_VERSION = "4.9.0"
 
     data class Release(
         val version: String,
@@ -36,6 +36,16 @@ object AppChangelog {
 
     /** Newest first. */
     val releases: List<Release> = listOf(
+        Release(
+            version = "4.9.0",
+            title = "Steadier heart rate + a stack of fixes",
+            date = "June 2026",
+            items = listOf(
+                "**Steadier live heart rate.** The Health screen now shows the same spike-filtered reading as the Live screen, so a brief sensor blip no longer flashes a wild number like 170+. (Thanks @ryanbr and @bringiton321 — #39.)",
+                "**Deleted sleep stays deleted.** A sleep session you delete no longer reappears after the next on-device recompute. (Thanks @ryanbr and @pikapik487 — #33.)",
+                "**Step calibration finds your phone steps.** Calibration now reads your phone's step count from both Apple Health and Health Connect imports — previously it could miss them and leave you stuck on \"Not calibrated\". (Thanks @pikapik487 and @bringiton321 — #37.)",
+            ),
+        ),
         Release(
             version = "4.8.0",
             title = "On-demand HRV, a haptic clock, sleep marks & more",

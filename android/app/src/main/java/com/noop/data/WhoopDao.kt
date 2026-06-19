@@ -363,6 +363,14 @@ interface WhoopDao : DeviceRegistryDao {
     @Query("SELECT * FROM dismissedWorkout WHERE deviceId = :deviceId")
     suspend fun dismissedWorkouts(deviceId: String): List<DismissedWorkout>
 
+    /** Record a deleted sleep night (#33). IGNORE so re-deleting the same night is a no-op. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertDismissedSleep(rows: List<DismissedSleep>)
+
+    /** All deleted-sleep markers for a [deviceId] (the computed "<id>-noop" source the engine writes). */
+    @Query("SELECT * FROM dismissedSleep WHERE deviceId = :deviceId")
+    suspend fun dismissedSleeps(deviceId: String): List<DismissedSleep>
+
     // MARK: - Frontier / stats (Reads.swift)
 
     /** Max HR sample ts for a device, or null if none — the biometric data frontier.

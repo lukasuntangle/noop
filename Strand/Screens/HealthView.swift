@@ -19,9 +19,10 @@ struct HealthView: View {
 
     // MARK: - Derived live HR
 
-    /// HR to display: reported value when >0, else derived from the latest R-R
-    /// interval (the strap streams R-R even when its HR field reads 0).
+    /// HR to display: the spike-filtered median (model.bpm, #39) when available, else the reported
+    /// value, else R-R-derived (the strap streams R-R even when its HR field reads 0).
     private var displayHR: Int? {
+        if let hr = model.bpm, hr > 0 { return hr }
         if let hr = live.heartRate, hr > 0 { return hr }
         if let last = live.rr.last, last > 0 { return Int((60_000.0 / Double(last)).rounded()) }
         return nil
@@ -167,6 +168,7 @@ private struct SyncStatusSection: View {
 private struct HeartRateSection: View {
     @EnvironmentObject var live: LiveState
     @EnvironmentObject var profile: ProfileStore
+    @EnvironmentObject var model: AppModel
 
     /// Rolling buffer of recently-streamed live HR (newest last), so the hero graph builds a real
     /// continuous time-series instead of collapsing to a 2-point flat line when the strap streams HR
@@ -176,9 +178,11 @@ private struct HeartRateSection: View {
     /// Capped to ~3 min @ ~1 Hz; resets when the view is recreated, which is fine for a live trace.
     @State private var hrHistory: [LiveHRSample] = []
 
-    /// HR to display: reported value when >0, else derived from the latest R-R
-    /// interval (the strap streams R-R even when its HR field reads 0).
+    /// HR to display: the spike-filtered median (model.bpm, #39) when available — raw live.heartRate
+    /// carries PPG harmonic spikes (real ~92 read as 170+); AppModel.bpm's doc mandates "every screen
+    /// should show THIS". Falls back to the reported value, then R-R-derived, only until the median has a sample.
     private var displayHR: Int? {
+        if let hr = model.bpm, hr > 0 { return hr }
         if let hr = live.heartRate, hr > 0 { return hr }
         if let last = live.rr.last, last > 0 { return Int((60_000.0 / Double(last)).rounded()) }
         return nil

@@ -17,6 +17,24 @@ approximate; downloads are on the [Releases](https://noop.fans/NoopApp/noop/rele
 
 ---
 
+## 4.9.0 — Steadier heart rate + a stack of fixes
+
+- **Steadier live heart rate (all platforms).** The Health tab and the macOS menu bar now show the
+  same spike-filtered reading as the Live screen, so a one-off optical sensor blip no longer flashes a
+  wild number like 170+. (Thanks @ryanbr and @bringiton321 — #39.)
+- **Deleted sleep stays deleted (Android).** A sleep session you delete is now recorded with a durable
+  tombstone, so it no longer reappears after the next on-device recompute. (Thanks @ryanbr and
+  @pikapik487 — #33.)
+- **Step calibration finds your phone steps (Android).** Calibration now reads your phone's step count
+  from both Apple Health and Health Connect imports — previously it read the wrong store and could miss
+  them entirely, leaving you stuck on "Not calibrated". (Thanks @pikapik487 and @bringiton321 — #37.)
+- **Homebrew install fixed (macOS).** `brew install` works again — the tap command now points at the
+  project's self-hosted home. The old `brew install --cask noopapp/noop/noop` shorthand resolved to a
+  host that no longer serves the tap; use `brew tap noopapp/noop https://noop.fans/NoopApp/homebrew-noop
+  && brew install --cask noop`. (Thanks @tonyjacked — #44.)
+
+---
+
 ## 4.8.0 — On-demand HRV, a haptic clock, sleep marks & more (all platforms)
 
 - **New: take an HRV reading on demand.** An "HRV reading" button on the Live screen captures about 60

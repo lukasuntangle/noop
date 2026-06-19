@@ -83,6 +83,7 @@ fun HealthScreen(vm: AppViewModel, onVitalClick: (String) -> Unit = {}) {
     val context = LocalContext.current
     val profile = remember { ProfileStore.from(context.applicationContext) }
     val live by vm.live.collectAsStateWithLifecycle()
+    val bpm by vm.bpm.collectAsStateWithLifecycle()
     val today by vm.today.collectAsStateWithLifecycle()
     // Full merged daily history — feeds the personal-baseline banding of the vitals grid.
     val days by vm.recentDays.collectAsStateWithLifecycle()
@@ -96,7 +97,7 @@ fun HealthScreen(vm: AppViewModel, onVitalClick: (String) -> Unit = {}) {
         onDispose { vm.releaseRealtimeHr() }
     }
 
-    val displayHr = displayHr(live)
+    val displayHr = displayHr(bpm, live)
     val hasLiveHr = displayHr != null
 
     ScreenScaffold(
@@ -108,7 +109,7 @@ fun HealthScreen(vm: AppViewModel, onVitalClick: (String) -> Unit = {}) {
         } else {
             // ScreenScaffold applies a 20dp arrangement gap between its direct children;
             // a small top-up reaches the section gap (28dp) used between macOS sections.
-            HeartRateSection(live = live, hrMax = hrMax)
+            HeartRateSection(live = live, hrMax = hrMax, bpm = bpm)
             Spacer(Modifier.height(Metrics.selectorTopUp))
             VitalsSection(
                 title = "Vital Signs",
@@ -612,7 +613,10 @@ fun VitalSignsScreen(vm: AppViewModel, onVitalClick: (String) -> Unit = {}) {
 // HR to display: the reported value when > 0, else derived from the latest R-R
 // interval in milliseconds (the strap streams R-R even when its HR field reads 0).
 
-private fun displayHr(live: LiveState): Int? {
+private fun displayHr(bpm: Int?, live: LiveState): Int? {
+    // #39: prefer the spike-filtered median (AppViewModel.bpm) over raw live.heartRate, which carries
+    // PPG harmonic spikes (real ~92 read as 170+). Raw / R-R are last-resort fallbacks.
+    if (bpm != null && bpm > 0) return bpm
     live.heartRate?.let { if (it > 0) return it }
     val lastRr = live.rr.lastOrNull()
     if (lastRr != null && lastRr > 0) return (60_000.0 / lastRr).roundToInt()
@@ -670,8 +674,8 @@ private fun synthesiseSeries(values: List<Double>): List<LiveHrSample> {
 // MARK: - Heart rate hero (live)
 
 @Composable
-private fun HeartRateSection(live: LiveState, hrMax: Int) {
-    val displayHr = displayHr(live)
+private fun HeartRateSection(live: LiveState, hrMax: Int, bpm: Int?) {
+    val displayHr = displayHr(bpm, live)
     val hasLiveHr = displayHr != null
     val derived = hrIsDerived(live)
     val fraction = hrFraction(displayHr, hrMax)

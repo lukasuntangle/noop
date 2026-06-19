@@ -548,10 +548,21 @@ object IntelligenceEngine {
         val stepsCalDays = 60
         val calOldest = AnalyticsEngine.dayString(
             nowLocalMidnight - (stepsCalDays - 1) * SECONDS_PER_DAY, tzOffsetSeconds)
-        // Phone reference steps per day, from the apple-health daily rows (steps > 0 only).
-        val appleRows = repo.dailyMetrics(WhoopRepository.APPLE_HEALTH_SOURCE, calOldest, newestDay)
+        // Phone reference steps per day, from the apple-health daily rows (steps > 0 only). On Android the
+        // Apple-Health importer banks `steps` in AppleDaily (DailyMetric holds only sleep/HR/HRV — see
+        // AppleHealthImporter), so read appleDaily here, not dailyMetrics, or the reference is always empty
+        // and NO phone-step calibration ever fits (the cause of the "Not calibrated" reports on #37).
+        val appleRows = repo.appleDaily(WhoopRepository.APPLE_HEALTH_SOURCE, calOldest, newestDay)
         val refStepsByDay = HashMap<String, Double>()
         for (r in appleRows) { val s = r.steps; if (s != null && s > 0) refStepsByDay[r.day] = s.toDouble() }
+        // #37: Health Connect steps (imported under "health-connect", also in appleDaily) are a phone
+        // reference too — union them in so HC-only users get a step calibration. Apple-health WINS on a
+        // same-day overlap (only fill days apple didn't already supply).
+        val hcStepRows = repo.appleDaily(WhoopRepository.HEALTH_CONNECT_SOURCE, calOldest, newestDay)
+        for (r in hcStepRows) {
+            val s = r.steps
+            if (s != null && s > 0 && !refStepsByDay.containsKey(r.day)) refStepsByDay[r.day] = s.toDouble()
+        }
         // Per-day motion volume over the calibration window, read from the owner-resolved strap streams.
         // (Owner resolution mirrors the scoring loop; a single-device install resolves to importedDeviceId.)
         val motionByDay = HashMap<String, Double>()
@@ -592,8 +603,13 @@ object IntelligenceEngine {
         // detected twin. Sleep has no delete-reinsert pass (unlike dailyMetric/workout), so this IS the
         // idempotency guard for the edited case. Overlap uses the edit's EFFECTIVE window. (#318)
         val editedWindows = editedRows.map { it.effectiveStartTs to it.endTs }
+        // #33: also drop any re-detected night the user has DELETED — a dismissedSleep tombstone keeps it
+        // from regenerating, mirroring the dismissedWorkout guard. Overlap (not exact startTs) because a
+        // re-detected onset drifts as more raw data arrives.
+        val dismissedWindows = repo.dismissedSleeps(importedDeviceId).map { it.startTs to it.endTs }
+        val skipWindows = editedWindows + dismissedWindows
         val sleepKept = sleepRows.filterNot { s ->
-            editedWindows.any { (start, end) -> s.startTs < end && start < s.endTs } // time-overlap test
+            skipWindows.any { (start, end) -> s.startTs < end && start < s.endTs } // time-overlap test
         }
         if (sleepKept.isNotEmpty()) repo.upsertSleepSessions(sleepKept)
         // Make re-detection idempotent across runs: clear the prior computed detected workouts

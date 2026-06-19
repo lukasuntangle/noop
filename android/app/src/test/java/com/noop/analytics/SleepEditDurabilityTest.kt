@@ -94,6 +94,91 @@ class SleepEditDurabilityTest {
         assertEquals(listOf(a, b), kept)
     }
 
+    // ── Durable DELETE tombstone (#33 / PR#46) ───────────────────────────────────────────────────
+    //
+    // A deleted night records a dismissedSleep(deviceId, startTs, endTs) marker; the recompute OR-s
+    // those windows into the same overlap filter (skipWindows = editedWindows + dismissedWindows), so
+    // a re-detected night that overlaps a tombstone is dropped and the delete stays durable. The helper
+    // below is the EXACT skipWindows predicate from IntelligenceEngine.analyzeRecent's sleepKept filter.
+
+    /** (startTs, endTs) tombstone span — the shape recorded by deleteSleepSession → dismissedSleeps. */
+    private fun dismissedWindow(start: Long, end: Long): Pair<Long, Long> = start to end
+
+    /** The EXACT sleepKept predicate AFTER the #33 change: edited + dismissed windows both suppress. */
+    private fun keptAfterGuardWithDismissed(
+        detected: List<SleepSession>,
+        edited: List<SleepSession>,
+        dismissed: List<Pair<Long, Long>>,
+    ): List<SleepSession> {
+        val editedWindows = edited.map { it.effectiveStartTs to it.endTs }
+        val skipWindows = editedWindows + dismissed
+        return detected.filterNot { s ->
+            skipWindows.any { (start, end) -> s.startTs < end && start < s.endTs }
+        }
+    }
+
+    @Test
+    fun deletedNightStaysGoneAfterRecompute() {
+        // User deleted last night [1000, 5000] → tombstone recorded. The next recompute re-detects the
+        // very same night and must DROP it (delete→recompute→stays-gone), not re-upsert it.
+        val tombstone = dismissedWindow(1000, 5000)
+        val reDetected = computedSleep(start = 1000, end = 5000)
+
+        val kept = keptAfterGuardWithDismissed(
+            detected = listOf(reDetected),
+            edited = emptyList(),
+            dismissed = listOf(tombstone),
+        )
+        assertTrue("a re-detected night that was deleted must stay gone", kept.isEmpty())
+    }
+
+    @Test
+    fun deletedNightStaysGoneWhenReDetectedOnsetDrifts() {
+        // The re-detected onset drifts as more raw data arrives ([1050, 4980] vs the deleted [1000,5000]).
+        // Overlap (not exact startTs) is why the tombstone still suppresses it — mirrors dismissedWorkout.
+        val tombstone = dismissedWindow(1000, 5000)
+        val reDetected = computedSleep(start = 1050, end = 4980)
+
+        val kept = keptAfterGuardWithDismissed(
+            detected = listOf(reDetected),
+            edited = emptyList(),
+            dismissed = listOf(tombstone),
+        )
+        assertTrue("a drifted re-detect of a deleted night must still be dropped", kept.isEmpty())
+    }
+
+    @Test
+    fun deleteTombstoneDoesNotSuppressOtherNights() {
+        // Deleting one night must not erase a genuinely separate later night.
+        val tombstone = dismissedWindow(1000, 5000)
+        val otherNight = computedSleep(start = 90_000, end = 120_000)
+
+        val kept = keptAfterGuardWithDismissed(
+            detected = listOf(otherNight),
+            edited = emptyList(),
+            dismissed = listOf(tombstone),
+        )
+        assertEquals("a non-overlapping night must survive an unrelated delete", listOf(otherNight), kept)
+    }
+
+    @Test
+    fun editAndDeleteWindowsBothSuppress() {
+        // Both guards compose: an edited night and a separately deleted night are each suppressed in one
+        // pass, while an untouched third night is kept.
+        val edited = computedSleep(start = 1000, end = 5000, userEdited = true)
+        val editedReDetect = computedSleep(start = 1040, end = 4990)
+        val deletedReDetect = computedSleep(start = 200_000, end = 230_000)
+        val freshNight = computedSleep(start = 400_000, end = 430_000)
+        val tombstone = dismissedWindow(200_000, 230_000)
+
+        val kept = keptAfterGuardWithDismissed(
+            detected = listOf(editedReDetect, deletedReDetect, freshNight),
+            edited = listOf(edited),
+            dismissed = listOf(tombstone),
+        )
+        assertEquals("only the untouched night survives", listOf(freshNight), kept)
+    }
+
     // ── Daily-aggregate substitution (SleepStageTotals.dailyAggregateHonoringEdits) ──────────────
 
     @Test
