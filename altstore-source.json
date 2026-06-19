@@ -18,6 +18,15 @@
       "screenshotURLs": [],
       "versions": [
         {
+          "version": "5.2.2",
+          "buildVersion": "133",
+          "date": "2026-06-19",
+          "localizedDescription": "Security & reliability hardening — import-crash guards, dependency pinning, tightened local-network handling.",
+          "downloadURL": "https://noop.fans/NoopApp/noop/releases/download/v5.2.2/NOOP-v5.2.2-ios.ipa",
+          "size": 9199765,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "5.2.1",
           "buildVersion": "132",
           "date": "2026-06-19",
@@ -820,12 +829,12 @@
           "NSHealthUpdateUsageDescription": "NOOP writes the metrics it computes from your strap back into Apple Health, on-device and only when you allow it."
         }
       },
-      "version": "5.2.1",
-      "buildVersion": "132",
+      "version": "5.2.2",
+      "buildVersion": "133",
       "versionDate": "2026-06-19",
-      "versionDescription": "Delete a sleep/nap (iPhone); swipe to mark read (Android)",
-      "downloadURL": "https://noop.fans/NoopApp/noop/releases/download/v5.2.1/NOOP-v5.2.1-ios.ipa",
-      "size": 9201153,
+      "versionDescription": "Security & reliability hardening — import-crash guards, dependency pinning, tightened local-network handling.",
+      "downloadURL": "https://noop.fans/NoopApp/noop/releases/download/v5.2.2/NOOP-v5.2.2-ios.ipa",
+      "size": 9199765,
       "minOSVersion": "17.0"
     }
   ],
