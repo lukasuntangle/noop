@@ -790,6 +790,8 @@ struct SettingsView: View {
     }
 
     private var strapStatusDetail: String {
+        // Bluetooth off / permission not granted takes priority — otherwise Re-scan silently does nothing.
+        if !live.connected, let bt = live.bluetoothUnavailable { return bt }
         if live.bonded && live.connected {
             return "Your strap is paired and sending data. Open Live for a real-time heart rate."
         }

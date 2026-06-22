@@ -214,6 +214,12 @@ public final class LiveState: ObservableObject {
     /// looped forever. Informational note for the Live screen; cleared on a clean reconnect or Live re-open.
     @Published public var standardHRMode: String? = nil
 
+    /// Set when CoreBluetooth is not `.poweredOn` — Bluetooth turned off, or (the common case for a
+    /// freshly-signed dev build) the macOS Bluetooth privacy permission not yet granted. Without this the
+    /// `connect()` poweredOn guard returns silently, so the Re-scan button looks dead with no feedback.
+    /// Carries an actionable message; cleared the moment the central reports `.poweredOn`.
+    @Published public var bluetoothUnavailable: String? = nil
+
     public init() {}
 
     /// Single funnel for battery readings — updates the published value AND notifies the hook,

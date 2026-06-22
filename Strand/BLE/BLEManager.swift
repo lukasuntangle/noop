@@ -611,8 +611,10 @@ public final class BLEManager: NSObject, ObservableObject {
         configureCollectorFamily()
         guard central.state == .poweredOn else {
             log("Bluetooth not powered on (state=\(central.state.rawValue)); cannot scan yet")
+            state.bluetoothUnavailable = Self.bluetoothUnavailableMessage(for: central.state)
             return
         }
+        state.bluetoothUnavailable = nil
         // Reuse the already-held peripheral ONLY if it's the strap we're pinned to. Without this guard a
         // multi-WHOOP switch attached straight back to the previously-held strap, ignoring the new active
         // device (registry said B, radio stayed on A). No pin (single-WHOOP) → always true, unchanged.
@@ -1758,6 +1760,28 @@ public final class BLEManager: NSObject, ObservableObject {
     private func log(_ s: String) {
         state.append(log: "[\(timestamp())] \(s)")
     }
+
+    /// Human-readable reason a scan can't start when the central isn't `.poweredOn`, so the UI can
+    /// explain a dead Re-scan instead of silently no-op'ing. Returns nil only for `.poweredOn`.
+    static func bluetoothUnavailableMessage(for state: CBManagerState) -> String? {
+        switch state {
+        case .poweredOn:
+            return nil
+        case .poweredOff:
+            return "Bluetooth is off. Turn it on in System Settings → Bluetooth, then tap Re-scan."
+        case .unauthorized:
+            return "NOOP isn't allowed to use Bluetooth. Enable it in System Settings → Privacy & "
+                + "Security → Bluetooth, then tap Re-scan."
+        case .unsupported:
+            return "This Mac reports no usable Bluetooth Low Energy radio, so a strap can't be reached."
+        case .resetting:
+            return "Bluetooth is restarting — try Re-scan again in a moment."
+        case .unknown:
+            return "Bringing up Bluetooth… if Re-scan stays unresponsive, check System Settings → Bluetooth."
+        @unknown default:
+            return "Bluetooth is unavailable right now. Check System Settings → Bluetooth, then tap Re-scan."
+        }
+    }
     private func timestamp() -> String {
         BLEManager.logTimeFormatter.string(from: Date())
     }
@@ -2046,7 +2070,13 @@ public final class BLEManager: NSObject, ObservableObject {
 extension BLEManager: @preconcurrency CBCentralManagerDelegate {
     public func centralManagerDidUpdateState(_ central: CBCentralManager) {
         log("Central state: \(central.state.rawValue) (5 = poweredOn)")
-        guard central.state == .poweredOn else { return }
+        guard central.state == .poweredOn else {
+            // Surface WHY scanning can't start, so Re-scan isn't a silent no-op (the connect() guard
+            // below would otherwise just return). Cleared on .poweredOn.
+            state.bluetoothUnavailable = Self.bluetoothUnavailableMessage(for: central.state)
+            return
+        }
+        state.bluetoothUnavailable = nil
         // Bootstrap the async store once on first poweredOn (idempotent if already set).
         Task { @MainActor in await bootstrapStore() }
         if let p = restoredPeripheral {
