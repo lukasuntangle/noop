@@ -353,18 +353,23 @@ struct TrendsReportPage: View {
 
     // MARK: Footer
 
+    /// Provenance legend text, kept out of the ViewBuilder so the compiler doesn't have to
+    /// type-check a long multi-term string concatenation inside the view body.
+    private static let legendText: String =
+        "How to read this: HRV, Resting HR, Sleep duration, Respiratory rate and Skin temperature "
+        + "are measured from the strap (skin temp is shown as the deviation from your own baseline). "
+        + "Workouts is the count of activities you logged or that were detected. Recovery, Strain and "
+        + "Stress are NOOP's own on-device scores, not clinical measures — Recovery is a daily readiness "
+        + "composite (HRV, resting HR, sleep and skin-temp trend), Strain is cardiovascular load derived "
+        + "from heart rate, and Stress is a 0–3 autonomic-load index from resting HR and HRV."
+
     private var footer: some View {
         VStack(alignment: .leading, spacing: 4) {
             Divider().overlay(StrandPalette.hairline)
             // Provenance legend (#457): a clinician (or anyone) reading this needs to know which numbers
             // are directly measured vs. NOOP's own derived scores. HRV / Resting HR come off the strap;
             // Recovery and Strain are computed on-device and are NOT clinical measures.
-            Text("How to read this: HRV, Resting HR, Sleep duration, Respiratory rate and Skin temperature "
-                + "are measured from the strap (skin temp is shown as the deviation from your own baseline). "
-                + "Workouts is the count of activities you logged or that were detected. Recovery, Strain and "
-                + "Stress are NOOP's own on-device scores, not clinical measures — Recovery is a daily readiness "
-                + "composite (HRV, resting HR, sleep and skin-temp trend), Strain is cardiovascular load derived "
-                + "from heart rate, and Stress is a 0–3 autonomic-load index from resting HR and HRV.")
+            Text(Self.legendText)
                 .font(StrandFont.footnote)
                 .foregroundStyle(StrandPalette.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
